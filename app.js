@@ -96,7 +96,11 @@ function classesOn(date) {
 }
 
 /* ---------- Состояние интерфейса ---------- */
-const ui = { tab: lsGet('planner.tab') || 'today', wo: 0, sp: 'all', tf: 'open', lq: '', ls: '' };
+const ui = {
+  tab: lsGet('planner.tab') || 'today', wo: 0, tf: 'open', lq: '', ls: '',
+  /* в расписании сразу показываем недели той же чётности, что и текущая */
+  sp: (() => { const w = weekInfo(new Date()); return w && !w.before && !w.odd ? 'even' : 'odd'; })()
+};
 if (!TABS.some(t => t[0] === ui.tab)) ui.tab = 'today';
 let draft = { files: [], pending: [], removed: [] };
 
@@ -286,13 +290,22 @@ function render() {
 const subj = id => byId('subjects', id);
 const byDue = (a, b) => (a.due || '9').localeCompare(b.due || '9') || (b.priority || 0) - (a.priority || 0);
 
-function classHtml(c) {
+const PIN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>';
+const plural = (n, a, b, c) => { const m = n % 100, k = n % 10; return n + ' ' + (m > 10 && m < 20 ? c : k === 1 ? a : k >= 2 && k <= 4 ? b : c); };
+const isNow = c => { const n = new Date(), t = pad(n.getHours()) + ':' + pad(n.getMinutes()); return isoDow(n) === c.day && c.start <= t && t < c.end; };
+
+/* Карточка пары. o.now — подсветить «идёт сейчас», o.hideParity — не показывать чётность */
+function classHtml(c, o = {}) {
   const s = subj(c.subjectId);
-  const meta2 = [TYPES[c.type], c.room && 'ауд. ' + c.room, c.teacher].filter(Boolean).map(esc).join(' · ');
-  return `<div class="item cls" style="--c:${s ? s.color : '#888'}" data-act="editClass" data-id="${c.id}">
-    <div class="time">${esc(c.start)}<br><span>${esc(c.end)}</span></div>
-    <div class="body"><div class="t">${esc(s ? s.name : 'Без предмета')}</div><div class="m">${meta2}</div></div>
-    ${c.parity === 'odd' ? '<span class="badge odd">нечёт.</span>' : c.parity === 'even' ? '<span class="badge even">чёт.</span>' : ''}</div>`;
+  const tags = [`<span class="pill ty">${esc(TYPES[c.type] || 'Занятие')}</span>`];
+  if (c.room) tags.push(`<span class="pill rm">${PIN}${esc(c.room)}</span>`);
+  const badge = o.now ? '<span class="badge now">идёт сейчас</span>'
+    : !o.hideParity && c.parity === 'odd' ? '<span class="badge odd">нечёт.</span>'
+    : !o.hideParity && c.parity === 'even' ? '<span class="badge even">чёт.</span>' : '';
+  return `<div class="item cls ty-${esc(c.type)} ${o.now ? 'now' : ''}" style="--c:${s ? esc(s.color) : '#888'}" data-act="editClass" data-id="${c.id}">
+    <div class="time"><b>${esc(c.start)}</b><span>${esc(c.end)}</span></div>
+    <div class="body"><div class="t">${esc(s ? s.name : 'Без предмета')}</div>
+      <div class="tags">${tags.join('')}</div>${c.teacher ? `<div class="m">${esc(c.teacher)}</div>` : ''}</div>${badge}</div>`;
 }
 function taskHtml(t, showDue = true) {
   const s = subj(t.subjectId), td = ymd(new Date());
@@ -323,7 +336,7 @@ function vToday() {
   return `<div class="head"><div><h1>${DAYS[isoDow(now) - 1]}, ${fmtDate(now)}</h1><div class="sub">${esc(weekLabel(wi))}</div></div>
     <div class="actions"><button class="btn primary" data-act="newTask">+ Задача</button></div></div>
     ${onboarding()}
-    <div class="card"><h2>Пары сегодня</h2>${cl.length ? cl.map(classHtml).join('') : '<div class="empty">Пар нет.</div>'}</div>
+    <div class="card"><h2>Пары сегодня</h2>${cl.length ? cl.map(c => classHtml(c, { now: isNow(c) })).join('') : '<div class="empty">Пар нет.</div>'}</div>
     ${overdue.length ? `<div class="card"><h2>Просрочено</h2>${overdue.map(t => taskHtml(t)).join('')}</div>` : ''}
     <div class="card"><h2>Задачи на сегодня</h2>${tod.length ? tod.map(t => taskHtml(t, false)).join('') : '<div class="empty">На сегодня задач нет.</div>'}</div>
     ${soon.length ? `<div class="card"><h2>Ближайшие 7 дней</h2>${soon.map(t => taskHtml(t)).join('')}</div>` : ''}`;
@@ -341,24 +354,30 @@ function vWeek() {
     <div class="days">${days.map(d => {
       const k = ymd(d), cl = classesOn(d), ts = tasks.filter(t => t.due === k).sort((a, b) => (a.done - b.done) || byDue(a, b));
       return `<section class="day ${k === td ? 'today' : ''}"><h3>${DAYS[isoDow(d) - 1]}<small>${esc(fmtDate(d))}</small></h3>
-        ${cl.map(classHtml).join('')}${ts.map(t => taskHtml(t, false)).join('')}
+        ${cl.map(c => classHtml(c)).join('')}${ts.map(t => taskHtml(t, false)).join('')}
         ${!cl.length && !ts.length ? '<div class="empty">Свободно</div>' : ''}</section>`;
     }).join('')}</div>`;
 }
 
 function vSchedule() {
-  const all = live('classes');
-  const f = ui.sp, shown = all.filter(c => f === 'all' || c.parity === 'all' || c.parity === f);
-  const chips = [['all', 'Все'], ['odd', 'Нечётные'], ['even', 'Чётные']].map(([k, l]) => `<button class="chip ${f === k ? 'on' : ''}" data-act="setSP" data-v="${k}">${l}</button>`).join('');
+  const cur = weekInfo(new Date()), curP = cur && !cur.before ? (cur.odd ? 'odd' : 'even') : null;
+  const f = ui.sp, shown = live('classes').filter(c => c.parity === 'all' || c.parity === f);
+  const seg = [['odd', 'Нечётные недели'], ['even', 'Чётные недели']].map(([k, l]) =>
+    `<button class="segb ${f === k ? 'on' : ''}" data-act="setSP" data-v="${k}">${l}${curP === k ? '<i class="now-dot" title="Сейчас эта неделя"></i>' : ''}</button>`).join('');
+  const todayDow = isoDow(new Date());
   let body = '';
   for (let d = 1; d <= 7; d++) {
     const list = shown.filter(c => c.day === d).sort((a, b) => a.start.localeCompare(b.start));
-    if (list.length) body += `<div class="card"><h2>${DAYS[d - 1]}</h2>${list.map(classHtml).join('')}</div>`;
+    if (d === 7 && !list.length) continue;
+    body += `<section class="dayc ${d === todayDow ? 'is-today' : ''} ${list.length ? '' : 'is-free'}">
+      <h3><span>${DAYS[d - 1]}${d === todayDow ? '<em class="badge">сегодня</em>' : ''}</span><small>${list.length ? plural(list.length, 'пара', 'пары', 'пар') : ''}</small></h3>
+      ${list.length ? list.map(c => classHtml(c, { hideParity: true })).join('') : '<div class="free">Занятий нет</div>'}</section>`;
   }
-  return `<div class="head"><div><h1>Расписание</h1><div class="sub">${esc(weekLabel(weekInfo(new Date())))}</div></div>
+  const total = shown.length;
+  return `<div class="head"><div><h1>Расписание</h1><div class="sub">${esc(weekLabel(cur))}${total ? ' · ' + plural(total, 'пара', 'пары', 'пар') + ' на ' + (f === 'odd' ? 'нечётной' : 'чётной') + ' неделе' : ''}</div></div>
     <div class="actions"><button class="btn" data-act="subjects">Предметы</button><button class="btn primary" data-act="newClass">+ Пара</button></div></div>
-    <div class="chips">${chips}</div>
-    ${body || '<div class="card"><div class="empty">Пока нет пар. Нажмите «+ Пара», чтобы добавить первую.</div></div>'}`;
+    <div class="seg2" role="tablist">${seg}</div>
+    ${total ? `<div class="sched">${body}</div>` : '<div class="card"><div class="empty">Пока нет пар. Нажмите «+ Пара», чтобы добавить первую.</div></div>'}`;
 }
 
 function vTasks() {
