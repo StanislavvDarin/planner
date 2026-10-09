@@ -9,7 +9,7 @@ const CLIENT_ID = '427778180640-n28krbjd59qgqp5nskod3m0b1urqk5d6.apps.googleuser
 const SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
 const DATA_NAME = 'planner-data.json';
 const MAX_FILE = 100 * 1024 * 1024;
-const APP_VERSION = '1.0';
+const APP_VERSION = '1.3';
 
 /* ---------- Мелкие помощники ---------- */
 const $ = (s, r = document) => r.querySelector(s);
