@@ -404,15 +404,19 @@ function vMonth() {
     : (td.slice(0, 7) === ymd(first).slice(0, 7) ? td : ymd(first));
   const tasks = live('tasks'), byDay = {};
   tasks.forEach(t => { if (t.due) (byDay[t.due] = byDay[t.due] || []).push(t); });
+  const onceBy = {};
+  live('classes').filter(c => c.date).sort((x, y) => x.start.localeCompare(y.start)).forEach(c => (onceBy[c.date] = onceBy[c.date] || []).push(c));
   const cells = [];
   for (let i = 0; i < weeks * 7; i++) {
     const d = addDays(gridStart, i), k = ymd(d), all = (byDay[k] || []).sort((x, y) => (x.done - y.done) || byDue(x, y));
-    const open = all.filter(t => !t.done), n = open.length, over = n && k < td;
-    const chips = all.slice(0, 3).map(t => { const tc = taskColor(t);
-      return `<span class="cal-t ${t.done ? 'done' : ''}" style="--c:${tc ? esc(tc) : '#868e96'}">${esc(t.title)}</span>`; }).join('');
-    const more = all.length > 3 ? `<span class="cal-more">+${all.length - 3}</span>` : '';
-    const dots = open.slice(0, 4).map(t => { const tc = taskColor(t); return `<i style="background:${tc ? esc(tc) : '#868e96'}"></i>`; }).join('');
-    cells.push(`<button type="button" class="cal-c ${d.getMonth() !== mi ? 'out' : ''} ${k === td ? 'today' : ''} ${k === sel ? 'sel' : ''} ${over ? 'over' : ''}" data-lv="${Math.min(n, 4)}" data-act="calDay" data-date="${k}" aria-label="${esc(fmtDate(d))}${n ? ', задач: ' + n : ''}">
+    const oc = onceBy[k] || [], open = all.filter(t => !t.done), n = open.length + oc.length, over = open.length && k < td;
+    const items = [...oc.map(c => { const s = subj(c.subjectId);
+      return { cls: 'once', c: s ? s.color : '#868e96', html: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>${esc(c.start)} ${esc(s ? s.name : 'Пара')}`, dot: true }; }),
+      ...all.map(t => ({ cls: t.done ? 'done' : '', c: taskColor(t) || '#868e96', html: esc(t.title), dot: !t.done }))];
+    const chips = items.slice(0, 3).map(x => `<span class="cal-t ${x.cls}" style="--c:${esc(x.c)}">${x.html}</span>`).join('');
+    const more = items.length > 3 ? `<span class="cal-more">+${items.length - 3}</span>` : '';
+    const dots = items.filter(x => x.dot).slice(0, 4).map(x => `<i class="${x.cls}" style="--c:${esc(x.c)}"></i>`).join('');
+    cells.push(`<button type="button" class="cal-c ${d.getMonth() !== mi ? 'out' : ''} ${k === td ? 'today' : ''} ${k === sel ? 'sel' : ''} ${over ? 'over' : ''}" data-lv="${Math.min(n, 4)}" data-act="calDay" data-date="${k}" aria-label="${esc(fmtDate(d))}${n ? ', событий: ' + n : ''}">
       <span class="cal-n">${d.getDate()}</span>${n ? `<span class="cal-cnt">${n}</span>` : ''}
       <span class="cal-dots">${dots}</span><span class="cal-list">${chips}${more}</span></button>`);
   }
@@ -426,7 +430,7 @@ function vMonth() {
       <button class="btn" data-act="monthGo" data-v="1" aria-label="Следующий месяц">›</button></div>
       ${ui.mo ? '<button class="btn go-now" data-act="monthGo" data-v="0">Сегодня</button>' : ''}</div>
     <div class="cal"><div class="cal-h">${DAYS_SHORT.map(x => `<span>${x}</span>`).join('')}</div><div class="cal-g">${cells.join('')}</div></div>
-    <div class="cal-legend"><span>Задач в день:</span><i data-lv="1"></i>1<i data-lv="2"></i>2<i data-lv="3"></i>3<i data-lv="4"></i>4+<i class="ov"></i>просрочено</div>
+    <div class="cal-legend"><span>Событий в день:</span><i data-lv="1"></i>1<i data-lv="2"></i>2<i data-lv="3"></i>3<i data-lv="4"></i>4+<i class="ov"></i>просрочено<span class="lg-once"><i class="ring"></i>разовое занятие</span></div>
     <div class="card cal-day"><div class="cal-dh"><div><h2 style="margin:0">${DAYS[isoDow(sd) - 1]}, ${esc(fmtDate(sd))}</h2><div class="m" style="color:var(--muted);font-size:13px">${esc(weekLabel(wi))}</div></div>
       <div class="btnrow" style="margin:0"><button class="btn small" data-act="newClassOn" data-date="${sel}">+ Пара</button><button class="btn small primary" data-act="newTaskOn" data-date="${sel}">+ Задача</button></div></div>
       ${cl.length ? cl.map(c => classHtml(c, { date: sel })).join('') : ''}

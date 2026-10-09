@@ -338,7 +338,8 @@ textarea{min-height:90px;resize:vertical}
   background:var(--brand);color:var(--brand-ink);font-size:10.5px;font-weight:700;line-height:1}
 .cal-c.over .cal-cnt{background:var(--danger);color:#fff}
 .cal-dots{display:flex;gap:3px;flex-wrap:wrap;margin-top:auto}
-.cal-dots i{width:6px;height:6px;border-radius:50%}
+.cal-dots i{width:7px;height:7px;border-radius:50%;background:var(--c,#868e96)}
+.cal-dots i.once{background:transparent;box-shadow:0 0 0 1.5px var(--c) inset}
 .cal-list{display:none}
 .cal-t{display:block;font-size:11.5px;line-height:1.3;padding:2px 6px;border-radius:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   background:color-mix(in srgb,var(--c) 20%,var(--card));border-left:3px solid var(--c);color:var(--text)}
@@ -400,3 +401,10 @@ h2.sec{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--
 .old{margin-top:14px}
 .old summary{cursor:pointer;color:var(--muted);font-size:14px;font-weight:600;padding:6px 2px;margin-bottom:10px}
 .cal-dh{flex-wrap:wrap}
+
+/* разовые занятия в календаре: контурные «ярлыки» с часами, чтобы отличать от задач */
+.cal-t.once{display:flex;align-items:center;gap:4px;background:transparent;border:1px dashed var(--c);border-left:3px solid var(--c);padding:1px 5px}
+.cal-t.once svg{width:11px;height:11px;flex:none;fill:none;stroke:var(--c);stroke-width:2.2;stroke-linecap:round}
+.lg-once{display:inline-flex;align-items:center;gap:6px;margin-left:10px}
+.cal-legend .ring{margin:0;background:transparent;border:2px solid var(--muted);border-radius:50%;width:11px;height:11px}
+.badge.once{border:1px dashed color-mix(in srgb,var(--brand) 55%,transparent)}
