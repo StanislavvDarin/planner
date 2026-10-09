@@ -408,3 +408,36 @@ h2.sec{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--
 .lg-once{display:inline-flex;align-items:center;gap:6px;margin-left:10px}
 .cal-legend .ring{margin:0;background:transparent;border:2px solid var(--muted);border-radius:50%;width:11px;height:11px}
 .badge.once{border:1px dashed color-mix(in srgb,var(--brand) 55%,transparent)}
+
+/* ---------- свои ссылки в меню ---------- */
+.lk{flex:none;display:grid;place-items:center;width:32px;height:32px;border-radius:10px;font-style:normal;
+  background:color-mix(in srgb,var(--c,#4f63ec) 16%,transparent);color:var(--c,#4f63ec)}
+.lk svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.lk .gl,.navlink .gl{font-size:17px;line-height:1;font-style:normal}
+.navlinks{display:none}
+.navlink{display:flex;align-items:center;gap:12px;color:var(--text);text-decoration:none;font-weight:500;min-width:0}
+.navlink span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.icg label.ic{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:var(--card2);border:2px solid transparent;color:var(--muted);cursor:pointer}
+.icg label.ic svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.icg input:checked+label.ic{border-color:var(--brand);color:var(--brand);background:var(--brand-soft);transform:none}
+@media (max-width:859px){
+  :root.has-links{--nav-h:112px}
+  .navlinks{display:flex;gap:8px;overflow-x:auto;padding:8px 12px 2px;scrollbar-width:none;max-width:640px;margin:0 auto}
+  .navlinks::-webkit-scrollbar{display:none}
+  .navlinks:empty{display:none}
+  .navlink{flex:none;gap:7px;padding:4px 12px 4px 5px;border:1px solid var(--line);border-radius:99px;background:var(--card);font-size:13px}
+  .navlink .lk{width:26px;height:26px;border-radius:50%}
+  .navlink .lk svg{width:15px;height:15px}
+  #nav{display:flex;flex-direction:column-reverse}
+  .tabs{width:100%}
+}
+@media (min-width:860px){
+  .navlinks{display:flex;flex-direction:column;gap:2px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+  .navlinks:empty{display:none}
+  .navlink{padding:8px 12px;border-radius:11px;font-size:15px}
+  .navlink:hover{background:var(--card2)}
+}
+
+.item.dim .lk,.item.dim .t{opacity:.5}
+.chkrow{display:flex;align-items:center;gap:10px;margin:0 0 14px;font-size:14.5px;cursor:pointer}
+.chkrow input{width:20px;height:20px;accent-color:var(--brand);flex:none}

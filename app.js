@@ -46,11 +46,41 @@ const ICONS = {
   settings: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>'
 };
 const TABS = [['today', 'Сегодня'], ['week', 'Неделя'], ['calendar', 'Календарь'], ['schedule', 'Расписание'], ['tasks', 'Задачи'], ['library', 'Материалы'], ['settings', 'Настройки']];
+/* Локальные файлы для ссылок в меню хранятся в самом браузере (IndexedDB) — только на этом устройстве */
+const idb = (() => {
+  let db;
+  const open = () => db || (db = new Promise((res, rej) => {
+    const r = indexedDB.open('planner-local', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('f');
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  }));
+  const tx = (mode, fn) => open().then(d => new Promise((res, rej) => { const t = d.transaction('f', mode), q = fn(t.objectStore('f')); t.oncomplete = () => res(q && q.result); t.onerror = () => rej(t.error); }));
+  return { put: (k, v) => tx('readwrite', s => s.put(v, k)), get: k => tx('readonly', s => s.get(k)), del: k => tx('readwrite', s => s.delete(k)) };
+})();
+const guessMime = f => f.type || ({ pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', txt: 'text/plain', html: 'text/html' })[(f.name.split('.').pop() || '').toLowerCase()] || 'application/octet-stream';
+
+/* значки для своих ссылок в меню */
+const LINK_ICONS = {
+  link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/>',
+  book: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5M8 7h7"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+  video: '<rect x="3" y="6" width="12" height="12" rx="2"/><path d="M15 10l6-3v10l-6-3"/>',
+  chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
+  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  star: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
+  cap: '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11.5V16c0 1.5 3 3 6 3s6-1.5 6-3v-4.5M22 9v6"/>',
+  code: '<path d="M8 8l-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/>',
+  cart: '<circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.6 12.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.5L21 8H6"/>',
+  music: '<path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
+  cloud: '<path d="M7 18a5 5 0 1 1 .9-9.9A6 6 0 0 1 19.5 10 4 4 0 0 1 18 18z"/>',
+  heart: '<path d="M12 20s-8-4.9-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 9c0 6.1-8 11-8 11z"/>'
+};
 const CHECK = '<svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg>';
 
 /* ---------- Данные ---------- */
-const COLLS = ['subjects', 'classes', 'tasks', 'files', 'library'];
-const emptyState = () => ({ v: 1, settings: { start: '', firstWeek: 1, u: 0 }, subjects: [], classes: [], tasks: [], files: [], library: [] });
+const COLLS = ['subjects', 'classes', 'tasks', 'files', 'library', 'links'];
+const emptyState = () => ({ v: 1, settings: { start: '', firstWeek: 1, u: 0 }, subjects: [], classes: [], tasks: [], files: [], library: [], links: [] });
 const LS_STATE = 'planner.state.v1', LS_META = 'planner.meta.v1', SS_TOKEN = 'planner.token';
 
 let S = (() => { try { const j = JSON.parse(lsGet(LS_STATE)); if (j && j.v) return Object.assign(emptyState(), j); } catch (e) { /* пусто */ } return emptyState(); })();
@@ -283,8 +313,17 @@ function renderTabs() {
   $('#tabs').innerHTML = TABS.map(([k, l]) =>
     `<button class="tab ${ui.tab === k ? 'on' : ''}" data-act="tab" data-v="${k}" ${ui.tab === k ? 'aria-current="page"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[k]}</svg><span>${l}</span></button>`).join('');
 }
+function linkIcon(l) {
+  return l.glyph ? `<span class="gl">${esc(l.glyph)}</span>` : `<svg viewBox="0 0 24 24" aria-hidden="true">${LINK_ICONS[l.icon] || LINK_ICONS.link}</svg>`;
+}
+function renderLinks() {
+  const ls = live('links').filter(l => !l.hidden).sort((x, y) => (x.n || 0) - (y.n || 0));
+  const box = $('#navlinks');
+  box.innerHTML = ls.map(l => `<a class="navlink" ${l.kind === 'file' ? `href="#" data-act="openLocal" data-id="${l.id}"` : `href="${esc(l.url)}" target="_blank" rel="noopener noreferrer"`} style="--c:${esc(l.color || '#4f63ec')}" title="${esc(l.title)}"><i class="lk">${linkIcon(l)}</i><span>${esc(l.title)}</span></a>`).join('');
+  document.documentElement.classList.toggle('has-links', ls.length > 0);
+}
 function render() {
-  renderTabs();
+  renderTabs(); renderLinks();
   const views = { today: vToday, week: vWeek, calendar: vMonth, schedule: vSchedule, tasks: vTasks, library: vLibrary, settings: vSettings };
   $('#view').innerHTML = views[ui.tab]();
   renderSync();
@@ -295,6 +334,8 @@ const taskColor = t => t.kind === 'extra' ? (t.color || null) : (subj(t.subjectI
 const byDue = (a, b) => (a.due || '9').localeCompare(b.due || '9') || (b.priority || 0) - (a.priority || 0);
 
 const CAL = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>';
+const EYE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+const EYE_OFF = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 6.1A10 10 0 0 1 12 6c6.5 0 10 6 10 6a17 17 0 0 1-3.2 3.9M6.5 7.5A17 17 0 0 0 2 12s3.5 6 10 6c1.5 0 2.8-.3 4-.8"/><path d="M9.9 10a3 3 0 0 0 4.1 4.1"/></svg>';
 const PEN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M14 6l4 4"/></svg>';
 const CLIP = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5l-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/></svg>';
 const CLOCK = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
@@ -539,6 +580,13 @@ function vSettings() {
     <button class="btn" data-act="exportData">Скачать копию данных</button>
     <label class="btn" style="margin:0">Загрузить копию<input type="file" accept="application/json,.json" data-change="importData" hidden></label></div>
     <div class="note">В копию входят расписание, задачи и список материалов (сами файлы остаются на Drive).</div></div>
+  <div class="card"><h2>Ссылки в меню</h2>
+    ${live('links').length ? live('links').sort((x, y) => (x.n || 0) - (y.n || 0)).map(l => `<div class="item ${l.hidden ? 'dim' : ''}"><i class="lk" style="--c:${esc(l.color || '#4f63ec')}">${linkIcon(l)}</i>
+      <div class="body" data-act="editLink" data-id="${l.id}"><div class="t">${esc(l.title)}${l.hidden ? ' <span class="badge">скрыта</span>' : ''}</div><div class="m">${l.kind === 'file' ? 'Файл: ' + esc(l.fileName || '') : esc(l.url.replace(/^https?:\/\//, '').slice(0, 48))}</div></div>
+      <button class="ib" data-act="toggleLink" data-id="${l.id}" aria-label="${l.hidden ? 'Показать в меню' : 'Скрыть из меню'}" title="${l.hidden ? 'Показать в меню' : 'Скрыть из меню'}">${l.hidden ? EYE_OFF : EYE}</button>
+      <button class="ib" data-act="editLink" data-id="${l.id}" aria-label="Изменить" title="Изменить">${PEN}</button></div>`).join('') : '<div class="empty">Своих значков пока нет.</div>'}
+    <div class="btnrow"><button class="btn" data-act="newLink">+ Добавить ссылку</button></div>
+    <div class="note">Значок появится в главном меню и будет открывать ссылку в новой вкладке. Можно добавить и файл с устройства (например, PDF с расписанием): он хранится только в этом браузере и на других устройствах не появится.</div></div>
   <div class="card"><h2>О приложении</h2><div class="kv"><span>Версия</span><span>${APP_VERSION}</span></div>
     <div class="note"><a href="privacy.html" style="color:var(--brand)">Политика конфиденциальности</a></div></div>`;
 }
@@ -624,6 +672,46 @@ function classMenu(id, date) {
 const UPL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>';
 const dropHtml = kind => `<label class="drop"><input type="file" multiple data-change="${kind}" hidden>${UPL}
   <b>Перетащите файлы сюда</b><span>или нажмите, чтобы выбрать · Ctrl+V — вставить из буфера</span></label>`;
+let linkFilePick = null;
+function linkModal(id) {
+  const l = id ? byId('links', id) : { icon: 'link', color: COLORS[0] };
+  if (!l) return;
+  linkFilePick = null;
+  openModal(id ? 'Ссылка в меню' : 'Новая ссылка', `
+    <label class="f">Название (подпись в меню)<input name="title" value="${esc(l.title)}" required maxlength="24" autocomplete="off" placeholder="Например, ЛКС"></label>
+    <div class="seg"><input type="radio" name="kind" id="lk1" value="url" ${l.kind === 'file' ? '' : 'checked'} data-change="linkKind"><label for="lk1">Адрес в интернете</label>
+    <input type="radio" name="kind" id="lk2" value="file" ${l.kind === 'file' ? 'checked' : ''} data-change="linkKind"><label for="lk2">Файл с устройства</label></div>
+    <div id="lkUrl" class="${l.kind === 'file' ? 'hidden' : ''}"><label class="f">Адрес<input name="url" type="text" inputmode="url" autocapitalize="off" spellcheck="false" value="${esc(l.url)}" ${l.kind === 'file' ? '' : 'required'} placeholder="https://" autocomplete="off"></label></div>
+    <div id="lkFile" class="${l.kind === 'file' ? '' : 'hidden'}"><label class="drop" id="lkDrop"><input type="file" name="lfile" data-change="linkFile" hidden>${UPL}
+      <b id="lkName">${l.fileName ? esc(l.fileName) : 'Выберите файл (например, PDF)'}</b><span>${l.fileName ? 'нажмите, чтобы заменить' : 'или перетащите сюда'} · файл останется только в этом браузере</span></label></div>
+    <div class="f" style="margin-bottom:14px">Значок<div class="sw icg">${Object.entries(LINK_ICONS).map(([k, p]) =>
+      `<span><input type="radio" name="icon" id="ic-${k}" value="${k}" ${(l.icon || 'link') === k ? 'checked' : ''}><label for="ic-${k}" class="ic" aria-label="${k}"><svg viewBox="0 0 24 24">${p}</svg></label></span>`).join('')}</div></div>
+    <label class="f">Или свой символ (буква или эмодзи, заменит значок)<input name="glyph" value="${esc(l.glyph)}" maxlength="4" autocomplete="off" placeholder="Например, 📚 или Л"></label>
+    <div class="f" style="margin-bottom:14px">Цвет<div class="sw">${COLORS.map((c, i) =>
+      `<span><input type="radio" name="color" id="lc${i}" value="${c}" ${(l.color || COLORS[0]) === c ? 'checked' : ''}><label for="lc${i}" style="--c:${c}" aria-label="${c}"></label></span>`).join('')}</div></div>
+    <label class="chkrow"><input type="checkbox" name="show" ${l.hidden ? '' : 'checked'}><span>Показывать в меню</span></label>
+    <div class="buttons"><button class="btn primary grow">Сохранить</button>${id ? `<button type="button" class="btn danger" data-act="delLink" data-id="${id}">Удалить</button>` : ''}</div>`,
+    async fd => {
+      const title = (fd.get('title') || '').trim(); if (!title) throw new Error('Введите название');
+      const base = id ? byId('links', id) : { id: uid(), n: Date.now() };
+      if (!id && live('links').length >= 10) throw new Error('Можно добавить не больше 10 ссылок');
+      let extra;
+      if (fd.get('kind') === 'file') {
+        const f = linkFilePick, key = base.fileKey || uid();
+        if (!f && !(base.kind === 'file' && base.fileName)) throw new Error('Выберите файл');
+        if (f) { if (f.size > 200 * 1024 * 1024) throw new Error('Файл больше 200 МБ'); await idb.put(key, { blob: f, type: guessMime(f), name: f.name }); }
+        extra = { kind: 'file', url: '', fileKey: key, fileName: f ? f.name : base.fileName };
+      } else {
+        let url = (fd.get('url') || '').trim(); if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) url = 'https://' + url;
+        let u; try { u = new URL(url); } catch (e) { throw new Error('Некорректный адрес'); }
+        if (!/^https?:$/.test(u.protocol) || !u.hostname.includes('.')) throw new Error('Адрес должен начинаться с http:// или https://');
+        extra = { kind: 'url', url: u.href, fileName: '' };
+      }
+      upsert('links', { ...base, ...extra, title, hidden: !fd.get('show'), icon: fd.get('icon') || 'link', glyph: (fd.get('glyph') || '').trim(), color: fd.get('color') || COLORS[0] });
+      closeModal(); commit();
+    });
+}
+
 function attHtml() {
   const rows = [];
   draft.files.forEach(fid => { const f = byId('files', fid); if (f) rows.push(`<div class="item"><div class="body"><div class="t" data-act="openFile" data-id="${fid}" style="cursor:pointer">${esc(f.name)}</div><div class="m">${fmtSize(f.size)}</div></div><button type="button" class="btn small danger" data-act="rmAtt" data-v="${fid}">Убрать</button></div>`); });
@@ -735,6 +823,22 @@ const A = {
     if (t) { (t.files || []).forEach(removeFile); tomb('tasks', t.id); }
     closeModal(); commit();
   },
+  newLink() { linkModal(null); },
+  async openLocal(el, e) {
+    e.preventDefault();
+    const l = byId('links', el.dataset.id); if (!l) return;
+    const w = window.open('about:blank', '_blank');
+    try {
+      const rec = await idb.get(l.fileKey);
+      if (!rec) { if (w) w.close(); toast('Этого файла нет на этом устройстве — выберите его заново'); linkModal(l.id); return; }
+      const url = URL.createObjectURL(new Blob([rec.blob], { type: rec.type }));
+      if (w) w.location.href = url; else window.location.href = url;
+      setTimeout(() => URL.revokeObjectURL(url), 120000);
+    } catch (err) { if (w) w.close(); toast('Не удалось открыть файл'); }
+  },
+  toggleLink(el) { const l = byId('links', el.dataset.id); if (l) { upsert('links', { ...l, hidden: !l.hidden }); commit(); } },
+  editLink(el) { linkModal(el.dataset.id); },
+  delLink(el) { if (!confirm('Удалить ссылку из меню?')) return; const l = byId('links', el.dataset.id); if (l && l.fileKey) idb.del(l.fileKey).catch(() => {}); tomb('links', el.dataset.id); closeModal(); commit(); },
   newClass() { classModal(null); },
   newClassOn(el) { classModal(null, { date: el.dataset.date }); },
   editClass(el) { classModal(el.dataset.id); },
@@ -806,6 +910,8 @@ const C = {
     const w = $('#newSubjWrap'); w.classList.toggle('hidden', el.value !== '__new');
     if (el.value === '__new') $('input', w).focus();
   },
+  linkKind(el) { $('#lkUrl').classList.toggle('hidden', el.value !== 'url'); $('#lkFile').classList.toggle('hidden', el.value !== 'file'); $('input[name=url]').required = el.value === 'url'; },
+  linkFile(el) { const f = el.files[0]; if (!f) return; linkFilePick = f; $('#lkName').textContent = f.name; const t = $('input[name=title]'); if (!t.value.trim()) t.value = f.name.replace(/\.[^.]+$/, '').slice(0, 24); },
   repeatSel(el) {
     const once = el.value === 'once';
     $('#onceArea').classList.toggle('hidden', !once); $('#dayWrap').classList.toggle('hidden', once); $('#parityWrap').classList.toggle('hidden', once);
