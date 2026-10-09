@@ -291,6 +291,7 @@ function render() {
 }
 
 const subj = id => byId('subjects', id);
+const taskColor = t => t.kind === 'extra' ? (t.color || null) : (subj(t.subjectId) || {}).color || null;
 const byDue = (a, b) => (a.due || '9').localeCompare(b.due || '9') || (b.priority || 0) - (a.priority || 0);
 
 const CAL = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>';
@@ -322,13 +323,15 @@ function taskHtml(t, showDue = true) {
   const s = subj(t.subjectId), td = ymd(new Date());
   const od = !t.done && t.due && t.due < td;
   const parts = [];
-  parts.push(s ? `<span class="mi sj"><span class="dot" style="background:${esc(s.color)}"></span><span>${esc(s.name)}</span></span>`
-    : `<span class="mi">${t.kind === 'extra' ? 'Доп. задача' : 'Учёба'}</span>`);
+  const tc = taskColor(t);
+  parts.push(t.kind === 'extra' ? `<span class="mi sj">${tc ? `<span class="dot" style="background:${esc(tc)}"></span>` : ''}<span>Доп. задача</span></span>`
+    : s ? `<span class="mi sj"><span class="dot" style="background:${esc(s.color)}"></span><span>${esc(s.name)}</span></span>`
+    : `<span class="mi">Учёба</span>`);
   if (showDue && t.due) parts.push(`<span class="mi due ${od ? 'od' : !t.done && t.due === td ? 'td' : ''}">${CAL}${t.due === td ? 'Сегодня' : esc(fmtDateFull(t.due))}</span>`);
   const nf = (t.files || []).filter(f => byId('files', f)).length;
   if (nf) parts.push(`<span class="mi">${CLIP}${nf}</span>`);
   if (t.priority && !t.done) parts.push('<span class="mi imp">Важно</span>');
-  return `<div class="item task ${t.done ? 'done' : ''} ${t.priority && !t.done ? 'imp' : ''}">
+  return `<div class="item task ${t.done ? 'done' : ''} ${t.priority && !t.done ? 'imp' : ''} ${tc ? 'tc' : ''}" ${tc ? `style="--c:${esc(tc)}"` : ''}>
     <button class="chk" data-act="toggleTask" data-id="${t.id}" aria-label="${t.done ? 'Вернуть в работу' : 'Отметить выполненной'}">${t.done ? CHECK : ''}</button>
     <div class="body" data-act="editTask" data-id="${t.id}"><div class="t">${esc(t.title)}</div><div class="meta">${parts.join('')}</div></div></div>`;
 }
@@ -391,10 +394,10 @@ function vMonth() {
   for (let i = 0; i < weeks * 7; i++) {
     const d = addDays(gridStart, i), k = ymd(d), all = (byDay[k] || []).sort((x, y) => (x.done - y.done) || byDue(x, y));
     const open = all.filter(t => !t.done), n = open.length, over = n && k < td;
-    const chips = all.slice(0, 3).map(t => { const s = subj(t.subjectId);
-      return `<span class="cal-t ${t.done ? 'done' : ''}" style="--c:${s ? esc(s.color) : '#868e96'}">${esc(t.title)}</span>`; }).join('');
+    const chips = all.slice(0, 3).map(t => { const tc = taskColor(t);
+      return `<span class="cal-t ${t.done ? 'done' : ''}" style="--c:${tc ? esc(tc) : '#868e96'}">${esc(t.title)}</span>`; }).join('');
     const more = all.length > 3 ? `<span class="cal-more">+${all.length - 3}</span>` : '';
-    const dots = open.slice(0, 4).map(t => { const s = subj(t.subjectId); return `<i style="background:${s ? esc(s.color) : '#868e96'}"></i>`; }).join('');
+    const dots = open.slice(0, 4).map(t => { const tc = taskColor(t); return `<i style="background:${tc ? esc(tc) : '#868e96'}"></i>`; }).join('');
     cells.push(`<button type="button" class="cal-c ${d.getMonth() !== mi ? 'out' : ''} ${k === td ? 'today' : ''} ${k === sel ? 'sel' : ''} ${over ? 'over' : ''}" data-lv="${Math.min(n, 4)}" data-act="calDay" data-date="${k}" aria-label="${esc(fmtDate(d))}${n ? ', задач: ' + n : ''}">
       <span class="cal-n">${d.getDate()}</span>${n ? `<span class="cal-cnt">${n}</span>` : ''}
       <span class="cal-dots">${dots}</span><span class="cal-list">${chips}${more}</span></button>`);
@@ -601,6 +604,8 @@ function taskModal(id, preset = {}) {
     <div class="seg"><input type="radio" name="kind" id="k1" value="study" ${t.kind !== 'extra' ? 'checked' : ''} data-change="kindSel"><label for="k1">Учёба</label>
     <input type="radio" name="kind" id="k2" value="extra" ${t.kind === 'extra' ? 'checked' : ''} data-change="kindSel"><label for="k2">Дополнительная</label></div>
     <div id="subjArea" class="${t.kind === 'extra' ? 'hidden' : ''}">${subjectSelect(t.subjectId)}</div>
+    <div id="colorArea" class="${t.kind === 'extra' ? '' : 'hidden'}"><div class="f" style="margin-bottom:14px">Цвет задачи
+      <div class="sw">${['', ...COLORS].map((c, i) => `<span><input type="radio" name="color" id="cl${i}" value="${c}" ${(t.color || '') === c ? 'checked' : ''}><label for="cl${i}" style="--c:${c || 'transparent'}" class="${c ? '' : 'none'}" aria-label="${c || 'Без цвета'}"></label></span>`).join('')}</div></div></div>
     <div class="row"><label class="f">Срок<input type="date" name="due" value="${esc(t.due)}"></label>
     <label class="f">Важность<select name="priority"><option value="0">Обычная</option><option value="1" ${t.priority ? 'selected' : ''}>Важная</option></select></label></div>
     <label class="f">Заметка<textarea name="note" maxlength="2000">${esc(t.note)}</textarea></label>
@@ -615,7 +620,7 @@ function taskModal(id, preset = {}) {
       for (const f of draft.pending) fileIds.push((await uploadAndRecord(f)).id);
       draft.removed.forEach(removeFile);
       const base = id ? byId('tasks', id) : { id: uid(), done: false, created: Date.now() };
-      upsert('tasks', { ...base, title, kind, subjectId, due: fd.get('due') || '', priority: +fd.get('priority') || 0, note: (fd.get('note') || '').trim(), files: fileIds });
+      upsert('tasks', { ...base, title, kind, subjectId, color: kind === 'extra' ? (fd.get('color') || '') : '', due: fd.get('due') || '', priority: +fd.get('priority') || 0, note: (fd.get('note') || '').trim(), files: fileIds });
       closeModal(); commit();
     });
 }
@@ -762,7 +767,7 @@ const C = {
     const w = $('#newSubjWrap'); w.classList.toggle('hidden', el.value !== '__new');
     if (el.value === '__new') $('input', w).focus();
   },
-  kindSel(el) { $('#subjArea').classList.toggle('hidden', el.value !== 'study'); },
+  kindSel(el) { $('#subjArea').classList.toggle('hidden', el.value !== 'study'); $('#colorArea').classList.toggle('hidden', el.value !== 'extra'); },
   libKind(el) { $('#libFile').classList.toggle('hidden', el.value !== 'file'); $('#libLink').classList.toggle('hidden', el.value !== 'link'); },
   pickAtt(el) { draft.pending.push(...el.files); el.value = ''; refreshAtt(); },
   pickLib(el) { draft.pending = [...el.files]; el.value = ''; refreshAtt(); },

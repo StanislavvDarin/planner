@@ -372,3 +372,15 @@ textarea{min-height:90px;resize:vertical}
   .cal-c[data-lv="4"],.cal-legend i[data-lv="4"]{background:color-mix(in srgb,var(--brand) 62%,var(--card))}
   .cal-c.over,.cal-legend i.ov{background:color-mix(in srgb,var(--danger) 26%,var(--card))}
 }
+
+/* выбор цвета задачи */
+.sw{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
+.sw span{position:relative}
+.sw input{position:absolute;opacity:0;pointer-events:none}
+.sw label{display:block;width:34px;height:34px;border-radius:50%;background:var(--c);cursor:pointer;border:2px solid transparent;
+  box-shadow:0 0 0 2px var(--card) inset;transition:transform .1s}
+.sw label.none{background:var(--card2);border:2px dashed var(--line);box-shadow:none}
+.sw input:checked+label{border-color:var(--text);transform:scale(1.08)}
+.sw input:focus-visible+label{outline:2px solid var(--brand);outline-offset:2px}
+.task.tc .chk{border-color:var(--c)}
+.task.tc.done .chk{background:var(--c)}
