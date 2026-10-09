@@ -1,6 +1,6 @@
 /* Сервис-воркер: даёт работу без интернета (интерфейс и последние данные). */
-const CACHE = 'planner-v1';
-const ASSETS = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'privacy.html'];
+const CACHE = 'planner-v2';
+const ASSETS = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'privacy.html', 'inter-400.woff', 'inter-500.woff', 'inter-600.woff', 'inter-700.woff'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
