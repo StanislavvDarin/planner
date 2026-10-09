@@ -384,3 +384,12 @@ textarea{min-height:90px;resize:vertical}
 .sw input:focus-visible+label{outline:2px solid var(--brand);outline-offset:2px}
 .task.tc .chk{border-color:var(--c)}
 .task.tc.done .chk{background:var(--c)}
+
+/* зона для файлов */
+.drop{display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;padding:18px 14px;margin:6px 0 14px;cursor:pointer;
+  border:2px dashed var(--line);border-radius:var(--r-sm);background:var(--card2);color:var(--muted);transition:border-color .15s,background .15s}
+.drop:hover,.drop.over{border-color:var(--brand);background:var(--brand-soft);color:var(--brand)}
+.drop svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.drop b{font-size:14.5px;color:var(--text);font-weight:600}
+.drop.over b,.drop:hover b{color:var(--brand)}
+.drop span{font-size:12.5px}

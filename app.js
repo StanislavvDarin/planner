@@ -359,6 +359,17 @@ function heroHtml(cl, now) {
     <div class="hero-m"><span>${CLOCK}${esc(c.start)}–${esc(c.end)}</span><span>${esc(TYPES[c.type] || 'Занятие')}</span>${c.room ? `<span>${PIN}${esc(c.room)}</span>` : ''}</div>
     ${cur ? `<div class="bar"><i style="width:${pr}%"></i></div>` : ''}${after}</div>`;
 }
+/* С какого времени «Сегодня» показывает пары завтра ('' — выключено, по умолчанию 20:00) */
+const tomorrowAfter = () => S.settings.tomorrowAfter === undefined ? '20:00' : (S.settings.tomorrowAfter || '');
+function heroTomorrow(cl, tm) {
+  const d = ymd(tm), title = `${DAYS[isoDow(tm) - 1]}, ${fmtDate(tm)}`;
+  if (!cl.length) return `<div class="hero calm"><div class="hero-k">Завтра · ${esc(title)}</div><div class="hero-t">Пар нет — свободный день</div></div>`;
+  const c = cl[0], s = subj(c.subjectId);
+  return `<div class="hero" style="--c:${s ? esc(s.color) : '#4f63ec'}" data-act="classMenu" data-id="${c.id}" data-date="${d}">
+    <div class="hero-k">Завтра · первая пара в ${esc(c.start)}</div><div class="hero-t">${esc(s ? s.name : 'Пара')}</div>
+    <div class="hero-m"><span>${CLOCK}${esc(c.start)}–${esc(c.end)}</span><span>${esc(TYPES[c.type] || 'Занятие')}</span>${c.room ? `<span>${PIN}${esc(c.room)}</span>` : ''}</div>
+    <div class="hero-n">Всего завтра: ${plural(cl.length, 'пара', 'пары', 'пар')} · до ${esc(cl[cl.length - 1].end)}</div></div>`;
+}
 function vToday() {
   const now = new Date(), td = ymd(now), wi = weekInfo(now), cl = classesOn(now), nm = now.getHours() * 60 + now.getMinutes();
   const open = live('tasks').filter(t => !t.done);
@@ -367,15 +378,17 @@ function vToday() {
   const soonEnd = ymd(addDays(now, 7));
   const soon = open.filter(t => t.due > td && t.due <= soonEnd).sort(byDue);
   const left = cl.filter(c => toMin(c.end) > nm).length, todOpen = tod.filter(t => !t.done).length;
+  const ta = tomorrowAfter(), tm = addDays(now, 1), useTom = !!ta && nm >= toMin(ta) && !!S.settings.start, clT = useTom ? classesOn(tm) : [];
   return `<div class="head"><div><h1>${DAYS[isoDow(now) - 1]}, ${fmtDate(now)}</h1><div class="sub">${weekBadge(wi)}</div></div>
     <div class="actions"><button class="btn primary" data-act="newTask">+ Задача</button></div></div>
     ${onboarding()}
-    ${heroHtml(cl, now)}
-    <div class="stats"><div class="stat"><b>${cl.length ? left : 0}</b><span>${cl.length ? 'пар осталось' : 'пар нет'}</span></div>
+    ${useTom ? heroTomorrow(clT, tm) : heroHtml(cl, now)}
+    <div class="stats"><div class="stat"><b>${useTom ? clT.length : cl.length ? left : 0}</b><span>${useTom ? 'пар завтра' : cl.length ? 'пар осталось' : 'пар нет'}</span></div>
       <div class="stat"><b>${todOpen}</b><span>задач на сегодня</span></div>
       <div class="stat ${overdue.length ? 'bad' : ''}"><b>${overdue.length}</b><span>просрочено</span></div></div>
     <div class="today-grid"><div>
-    <div class="card"><h2>Пары сегодня</h2>${cl.length ? cl.map(c => classHtml(c, { now: isNow(c), past: toMin(c.end) <= nm, date: td })).join('') : '<div class="empty">Пар нет.</div>'}</div></div><div>
+    ${useTom ? `<div class="card"><h2>Пары завтра · ${esc(DAYS[isoDow(tm) - 1])}, ${esc(fmtDate(tm))}</h2>${clT.length ? clT.map(c => classHtml(c, { date: ymd(tm) })).join('') : '<div class="empty">Завтра пар нет.</div>'}</div>`
+    : `<div class="card"><h2>Пары сегодня</h2>${cl.length ? cl.map(c => classHtml(c, { now: isNow(c), past: toMin(c.end) <= nm, date: td })).join('') : '<div class="empty">Пар нет.</div>'}</div>`}</div><div>
     ${overdue.length ? `<div class="card"><h2>Просрочено</h2>${overdue.map(t => taskHtml(t)).join('')}</div>` : ''}
     <div class="card"><h2>Задачи на сегодня</h2>${tod.length ? tod.map(t => taskHtml(t, false)).join('') : '<div class="empty">На сегодня задач нет.</div>'}</div>
     ${soon.length ? `<div class="card"><h2>Ближайшие 7 дней</h2>${soon.map(t => taskHtml(t)).join('')}</div>` : ''}</div></div>`;
@@ -500,6 +513,9 @@ function vSettings() {
     <div class="note">Неделя, в которую попадает указанная дата, получит этот номер; дальше нумерация идёт по порядку. Нечётные и чётные недели определяются по номеру.</div>
     ${wi ? `<div class="kv" style="margin-top:8px"><span>Сегодня</span><span>${esc(weekLabel(wi))}</span></div>` : ''}
     ${nx ? `<div class="kv"><span>Через неделю</span><span>${esc(weekLabel(nx))}</span></div>` : ''}</div>
+  <div class="card"><h2>Вкладка «Сегодня»</h2>
+    <label class="f">Показывать пары завтра, начиная с<input type="time" value="${esc(tomorrowAfter())}" data-change="setTomorrow"></label>
+    <div class="note">После этого времени вместо «Пары сегодня» появится «Пары завтра». Очистите поле, чтобы всегда показывать только сегодняшние пары. Сейчас: ${tomorrowAfter() ? 'с ' + esc(tomorrowAfter()) : 'выключено'}.</div></div>
   <div class="card"><h2>Предметы</h2><div class="kv"><span>Всего предметов</span><span>${live('subjects').length}</span></div>
     <button class="btn" data-act="subjects">Управление предметами</button></div>
   <div class="card"><h2>Google Drive</h2>
@@ -587,6 +603,9 @@ function classMenu(id, date) {
     <div class="buttons"><button type="button" class="btn grow" data-act="editClass" data-id="${c.id}">Изменить пару</button></div>`, () => closeModal());
 }
 
+const UPL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>';
+const dropHtml = kind => `<label class="drop"><input type="file" multiple data-change="${kind}" hidden>${UPL}
+  <b>Перетащите файлы сюда</b><span>или нажмите, чтобы выбрать · Ctrl+V — вставить из буфера</span></label>`;
 function attHtml() {
   const rows = [];
   draft.files.forEach(fid => { const f = byId('files', fid); if (f) rows.push(`<div class="item"><div class="body"><div class="t" data-act="openFile" data-id="${fid}" style="cursor:pointer">${esc(f.name)}</div><div class="m">${fmtSize(f.size)}</div></div><button type="button" class="btn small danger" data-act="rmAtt" data-v="${fid}">Убрать</button></div>`); });
@@ -610,7 +629,7 @@ function taskModal(id, preset = {}) {
     <label class="f">Важность<select name="priority"><option value="0">Обычная</option><option value="1" ${t.priority ? 'selected' : ''}>Важная</option></select></label></div>
     <label class="f">Заметка<textarea name="note" maxlength="2000">${esc(t.note)}</textarea></label>
     <div class="files"><label class="f" style="margin-bottom:4px">Вложения</label><div id="att">${attHtml()}</div>
-    <label class="btn small" style="display:inline-block;margin:6px 0 14px">Прикрепить файл<input type="file" multiple data-change="pickAtt" hidden></label></div>
+    ${dropHtml('pickAtt')}</div>
     <div class="buttons"><button class="btn primary grow">Сохранить</button>${id ? `<button type="button" class="btn danger" data-act="delTask" data-id="${id}">Удалить</button>` : ''}</div>`,
     async fd => {
       const title = (fd.get('title') || '').trim(); if (!title) throw new Error('Введите название');
@@ -633,7 +652,7 @@ function libModal(id) {
   openModal(id ? 'Материал' : 'Новый материал', `
     ${id ? '' : `<div class="seg"><input type="radio" name="kind" id="m1" value="file" checked data-change="libKind"><label for="m1">Файл</label><input type="radio" name="kind" id="m2" value="link" data-change="libKind"><label for="m2">Ссылка</label></div>`}
     <div id="libFile" class="${x.kind === 'link' ? 'hidden' : ''}">${id ? `<div class="item"><div class="body"><div class="t">${f ? esc(f.name) : 'Файл удалён'}</div><div class="m">${f ? fmtSize(f.size) : ''}</div></div>${f ? `<button type="button" class="btn small" data-act="openFile" data-id="${f.id}">Открыть</button>` : ''}</div>`
-      : `<div class="files"><div id="att">${attHtml()}</div><label class="btn small" style="display:inline-block;margin:0 0 14px">Выбрать файлы<input type="file" multiple data-change="pickLib" hidden></label></div>`}</div>
+      : `<div class="files"><div id="att">${attHtml()}</div>${dropHtml('pickLib')}</div>`}</div>
     <div id="libLink" class="${x.kind === 'link' ? '' : 'hidden'}"><label class="f">Адрес ссылки<input name="url" type="url" value="${esc(x.url)}" placeholder="https://"></label></div>
     <label class="f">Название<input name="title" value="${esc(x.title)}" maxlength="200" autocomplete="off" placeholder="Если не указано — имя файла"></label>
     ${subjectSelect(x.subjectId)}
@@ -761,6 +780,7 @@ const C = {
     if (!el.value) return;
     ui.wo = Math.round((mondayOf(parseYmd(el.value)) - mondayOf(new Date())) / (7 * 864e5)); render();
   },
+  setTomorrow(el) { S.settings = { ...S.settings, tomorrowAfter: el.value, u: Date.now() }; commit(); },
   setStart(el) { S.settings = { ...S.settings, start: el.value, u: Date.now() }; commit(); },
   setFirstWeek(el) { const n = parseInt(el.value, 10); S.settings = { ...S.settings, firstWeek: isNaN(n) ? 1 : n, u: Date.now() }; commit(); },
   subjSel(el) {
@@ -770,7 +790,7 @@ const C = {
   kindSel(el) { $('#subjArea').classList.toggle('hidden', el.value !== 'study'); $('#colorArea').classList.toggle('hidden', el.value !== 'extra'); },
   libKind(el) { $('#libFile').classList.toggle('hidden', el.value !== 'file'); $('#libLink').classList.toggle('hidden', el.value !== 'link'); },
   pickAtt(el) { draft.pending.push(...el.files); el.value = ''; refreshAtt(); },
-  pickLib(el) { draft.pending = [...el.files]; el.value = ''; refreshAtt(); },
+  pickLib(el) { draft.pending.push(...el.files); el.value = ''; refreshAtt(); },
   subjName(el) { const s = subj(el.dataset.id); const n = el.value.trim(); if (s && n) { upsert('subjects', { ...s, name: n }); persist(); meta.dirty = true; saveMeta(); scheduleSync(); } },
   subjColor(el) { const s = subj(el.dataset.id); if (s) { upsert('subjects', { ...s, color: el.value }); persist(); meta.dirty = true; saveMeta(); scheduleSync(); } },
   async importData(el) {
@@ -794,6 +814,40 @@ document.addEventListener('change', e => {
 document.addEventListener('input', e => {
   if (e.target.id === 'lq') { ui.lq = e.target.value; $('#lib-list').innerHTML = libList(); }
 });
+/* Перетаскивание и вставка файлов в поля вложений */
+const dropZone = () => { const z = $('#modal-root .drop'); return z && z.offsetParent !== null ? z : null; };
+function addFiles(files) {
+  const list = [...files].filter(f => f && f.size >= 0);
+  if (!list.length) return;
+  const stamp = () => { const d = new Date(); return `${ymd(d)} ${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`; };
+  list.forEach((f, i) => {
+    const generic = /^image\.(png|jpe?g|gif|webp)$/i.test(f.name);
+    draft.pending.push(generic ? new File([f], `Снимок ${stamp()}${list.length > 1 ? '-' + (i + 1) : ''}.${f.name.split('.').pop().toLowerCase()}`, { type: f.type }) : f);
+  });
+  refreshAtt(); toast(`Добавлено файлов: ${list.length}`);
+}
+const hasFiles = e => e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files');
+['dragenter', 'dragover'].forEach(t => document.addEventListener(t, e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  const z = dropZone(); if (z) { e.dataTransfer.dropEffect = 'copy'; z.classList.add('over'); }
+}));
+document.addEventListener('dragleave', e => {
+  if (e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('#modal-root')) return;
+  const z = $('#modal-root .drop'); if (z) z.classList.remove('over');
+});
+document.addEventListener('drop', e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();           // иначе браузер откроет файл вместо планера
+  const z = $('#modal-root .drop'); if (z) z.classList.remove('over');
+  if (dropZone()) addFiles(e.dataTransfer.files);
+});
+document.addEventListener('paste', e => {
+  const fs = e.clipboardData && e.clipboardData.files;
+  if (!fs || !fs.length || !dropZone()) return;
+  e.preventDefault(); addFiles(fs);
+});
+
 let swipe = null;
 document.addEventListener('touchstart', e => {
   swipe = (ui.tab === 'week' || ui.tab === 'calendar') && !$('#modal-root').firstChild && e.touches.length === 1 && !(e.target.closest && e.target.closest('input,select,textarea'))
