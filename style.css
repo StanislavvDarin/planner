@@ -393,3 +393,10 @@ textarea{min-height:90px;resize:vertical}
 .drop b{font-size:14.5px;color:var(--text);font-weight:600}
 .drop.over b,.drop:hover b{color:var(--brand)}
 .drop span{font-size:12.5px}
+
+/* разовые занятия */
+.badge.once{background:var(--brand-soft);color:var(--brand)}
+h2.sec{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:22px 0 12px}
+.old{margin-top:14px}
+.old summary{cursor:pointer;color:var(--muted);font-size:14px;font-weight:600;padding:6px 2px;margin-bottom:10px}
+.cal-dh{flex-wrap:wrap}

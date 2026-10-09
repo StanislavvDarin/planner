@@ -94,7 +94,7 @@ const weekBadge = wi => wi && !wi.before ? `<span class="badge ${wi.odd ? 'odd' 
 function classesOn(date) {
   const wi = weekInfo(date), dow = isoDow(date);
   return live('classes')
-    .filter(c => c.day === dow && (!wi || wi.before || c.parity === 'all' || (c.parity === 'odd') === wi.odd))
+    .filter(c => c.date ? c.date === ymd(date) : c.day === dow && (!wi || wi.before || c.parity === 'all' || (c.parity === 'odd') === wi.odd))
     .sort((a, b) => a.start.localeCompare(b.start));
 }
 
@@ -300,7 +300,7 @@ const CLIP = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5l-8.6
 const CLOCK = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
 const PIN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>';
 const plural = (n, a, b, c) => { const m = n % 100, k = n % 10; return n + ' ' + (m > 10 && m < 20 ? c : k === 1 ? a : k >= 2 && k <= 4 ? b : c); };
-const isNow = c => { const n = new Date(), t = pad(n.getHours()) + ':' + pad(n.getMinutes()); return isoDow(n) === c.day && c.start <= t && t < c.end; };
+const isNow = c => { const n = new Date(), t = pad(n.getHours()) + ':' + pad(n.getMinutes()); return (c.date ? c.date === ymd(n) : isoDow(n) === c.day) && c.start <= t && t < c.end; };
 
 /* Карточка пары. o.now — подсветить «идёт сейчас», o.hideParity — не показывать чётность */
 function classHtml(c, o = {}) {
@@ -308,6 +308,7 @@ function classHtml(c, o = {}) {
   const tags = [`<span class="pill ty">${esc(TYPES[c.type] || 'Занятие')}</span>`];
   if (c.room) tags.push(`<span class="pill rm">${PIN}${esc(c.room)}</span>`);
   const badge = o.now ? '<span class="badge now">идёт сейчас</span>'
+    : c.date ? `<span class="badge once">${o.showDate ? esc(fmtDate(parseYmd(c.date))) : 'разово'}</span>`
     : !o.hideParity && c.parity === 'odd' ? '<span class="badge odd">нечёт.</span>'
     : !o.hideParity && c.parity === 'even' ? '<span class="badge even">чёт.</span>' : '';
   if (o.date && c.subjectId) {
@@ -383,7 +384,7 @@ function vToday() {
     <div class="actions"><button class="btn primary" data-act="newTask">+ Задача</button></div></div>
     ${onboarding()}
     ${useTom ? heroTomorrow(clT, tm) : heroHtml(cl, now)}
-    <div class="stats"><div class="stat"><b>${useTom ? clT.length : cl.length ? left : 0}</b><span>${useTom ? 'пар завтра' : cl.length ? 'пар осталось' : 'пар нет'}</span></div>
+    <div class="stats"><div class="stat"><b>${useTom ? clT.length : cl.length ? left : 0}</b><span>${useTom ? plural(clT.length, 'пара', 'пары', 'пар').replace(/^\d+ /, '') + ' завтра' : cl.length ? 'пар осталось' : 'пар нет'}</span></div>
       <div class="stat"><b>${todOpen}</b><span>задач на сегодня</span></div>
       <div class="stat ${overdue.length ? 'bad' : ''}"><b>${overdue.length}</b><span>просрочено</span></div></div>
     <div class="today-grid"><div>
@@ -427,7 +428,7 @@ function vMonth() {
     <div class="cal"><div class="cal-h">${DAYS_SHORT.map(x => `<span>${x}</span>`).join('')}</div><div class="cal-g">${cells.join('')}</div></div>
     <div class="cal-legend"><span>Задач в день:</span><i data-lv="1"></i>1<i data-lv="2"></i>2<i data-lv="3"></i>3<i data-lv="4"></i>4+<i class="ov"></i>просрочено</div>
     <div class="card cal-day"><div class="cal-dh"><div><h2 style="margin:0">${DAYS[isoDow(sd) - 1]}, ${esc(fmtDate(sd))}</h2><div class="m" style="color:var(--muted);font-size:13px">${esc(weekLabel(wi))}</div></div>
-      <button class="btn small primary" data-act="newTaskOn" data-date="${sel}">+ Задача</button></div>
+      <div class="btnrow" style="margin:0"><button class="btn small" data-act="newClassOn" data-date="${sel}">+ Пара</button><button class="btn small primary" data-act="newTaskOn" data-date="${sel}">+ Задача</button></div></div>
       ${cl.length ? cl.map(c => classHtml(c, { date: sel })).join('') : ''}
       ${sts.length ? sts.map(t => taskHtml(t, false)).join('') : ''}
       ${!cl.length && !sts.length ? '<div class="empty">В этот день пар и задач нет.</div>' : ''}</div>`;
@@ -453,7 +454,7 @@ function vWeek() {
 
 function vSchedule() {
   const cur = weekInfo(new Date()), curP = cur && !cur.before ? (cur.odd ? 'odd' : 'even') : null;
-  const f = ui.sp, shown = live('classes').filter(c => c.parity === 'all' || c.parity === f);
+  const f = ui.sp, shown = live('classes').filter(c => !c.date && (c.parity === 'all' || c.parity === f));
   const seg = [['odd', 'Нечётные недели'], ['even', 'Чётные недели']].map(([k, l]) =>
     `<button class="segb ${f === k ? 'on' : ''}" data-act="setSP" data-v="${k}">${l}${curP === k ? '<i class="now-dot" title="Сейчас эта неделя"></i>' : ''}</button>`).join('');
   const todayDow = isoDow(new Date());
@@ -465,11 +466,18 @@ function vSchedule() {
       <h3><span>${DAYS[d - 1]}${d === todayDow ? '<em class="badge">сегодня</em>' : ''}</span><small>${list.length ? plural(list.length, 'пара', 'пары', 'пар') : ''}</small></h3>
       ${list.length ? list.map(c => classHtml(c, { hideParity: true })).join('') : '<div class="free">Занятий нет</div>'}</section>`;
   }
-  const total = shown.length;
+  const total = shown.length, td = ymd(new Date());
+  const once = live('classes').filter(c => c.date).sort((x, y) => x.date.localeCompare(y.date) || x.start.localeCompare(y.start));
+  const upc = once.filter(c => c.date >= td), old = once.filter(c => c.date < td).slice(-6);
+  const grp = list => { const m = {}; list.forEach(c => (m[c.date] = m[c.date] || []).push(c)); return Object.entries(m).map(([d, cs]) => { const dd = parseYmd(d);
+    return `<section class="dayc ${d === td ? 'is-today' : ''}"><h3><span>${DAYS[isoDow(dd) - 1]}, ${esc(fmtDate(dd))}${d === td ? '<em class="badge">сегодня</em>' : ''}</span></h3>${cs.map(c => classHtml(c, { hideParity: true, past: d < td })).join('')}</section>`; }).join(''); };
+  const onceHtml = once.length ? `<h2 class="sec">Разовые занятия</h2>${upc.length ? `<div class="sched">${grp(upc)}</div>` : '<div class="empty" style="margin-bottom:12px">Ближайших разовых занятий нет.</div>'}
+    ${old.length ? `<details class="old"><summary>Прошедшие (${old.length})</summary><div class="sched">${grp(old)}</div></details>` : ''}` : '';
   return `<div class="head"><div><h1>Расписание</h1><div class="sub">${weekBadge(cur)}${total ? '<span>' + plural(total, 'пара', 'пары', 'пар') + ' на ' + (f === 'odd' ? 'нечётной' : 'чётной') + ' неделе</span>' : ''}</div></div>
     <div class="actions"><button class="btn" data-act="subjects">Предметы</button><button class="btn primary" data-act="newClass">+ Пара</button></div></div>
     <div class="seg2" role="tablist">${seg}</div>
-    ${total ? `<div class="sched">${body}</div>` : '<div class="card"><div class="empty">Пока нет пар. Нажмите «+ Пара», чтобы добавить первую.</div></div>'}`;
+    ${total ? `<div class="sched">${body}</div>` : '<div class="card"><div class="empty">Регулярных пар на этой неделе нет. Нажмите «+ Пара», чтобы добавить.</div></div>'}
+    ${onceHtml}`;
 }
 
 function vTasks() {
@@ -568,15 +576,19 @@ function resolveSubject(fd) {
 }
 const opts = (obj, sel) => Object.entries(obj).map(([k, l]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${l}</option>`).join('');
 
-function classModal(id) {
-  const c = id ? byId('classes', id) : { day: 1, start: '09:00', end: '10:30', type: 'lecture', parity: 'all' };
+function classModal(id, preset = {}) {
+  const c = id ? byId('classes', id) : { day: 1, start: '09:00', end: '10:30', type: 'lecture', parity: 'all', ...preset };
   if (!c) return;
+  const once = !!c.date, dval = c.date || ymd(new Date());
   openModal(id ? 'Пара' : 'Новая пара', `${subjectSelect(c.subjectId)}
-    <div class="row"><label class="f">День<select name="day">${DAYS.map((d, i) => `<option value="${i + 1}" ${c.day === i + 1 ? 'selected' : ''}>${d}</option>`).join('')}</select></label>
+    <div class="seg"><input type="radio" name="repeat" id="r1" value="weekly" ${once ? '' : 'checked'} data-change="repeatSel"><label for="r1">Каждую неделю</label>
+    <input type="radio" name="repeat" id="r2" value="once" ${once ? 'checked' : ''} data-change="repeatSel"><label for="r2">Один раз</label></div>
+    <div id="onceArea" class="${once ? '' : 'hidden'}"><label class="f">Дата занятия<input type="date" name="date" value="${esc(dval)}" ${once ? 'required' : ''}></label></div>
+    <div class="row"><label class="f ${once ? 'hidden' : ''}" id="dayWrap">День<select name="day">${DAYS.map((d, i) => `<option value="${i + 1}" ${c.day === i + 1 ? 'selected' : ''}>${d}</option>`).join('')}</select></label>
     <label class="f">Тип занятия<select name="type">${opts(TYPES, c.type)}</select></label></div>
     <div class="row"><label class="f">Начало<input type="time" name="start" value="${esc(c.start)}" required></label>
     <label class="f">Конец<input type="time" name="end" value="${esc(c.end)}" required></label></div>
-    <label class="f">Недели<select name="parity">${opts({ all: 'Каждую неделю', odd: 'Только нечётные', even: 'Только чётные' }, c.parity)}</select></label>
+    <label class="f ${once ? 'hidden' : ''}" id="parityWrap">Недели<select name="parity">${opts({ all: 'Каждую неделю', odd: 'Только нечётные', even: 'Только чётные' }, c.parity)}</select></label>
     <div class="row"><label class="f">Аудитория<input name="room" value="${esc(c.room)}" maxlength="40"></label>
     <label class="f">Преподаватель<input name="teacher" value="${esc(c.teacher)}" maxlength="80"></label></div>
     <div class="buttons"><button class="btn primary grow">Сохранить</button>${id ? `<button type="button" class="btn danger" data-act="delClass" data-id="${id}">Удалить</button>` : ''}</div>`,
@@ -584,8 +596,10 @@ function classModal(id) {
       if (fd.get('end') <= fd.get('start')) throw new Error('Конец пары должен быть позже начала');
       const subjectId = resolveSubject(fd);
       if (!subjectId) throw new Error('Выберите предмет');
-      upsert('classes', { id: id || uid(), subjectId, day: +fd.get('day'), type: fd.get('type'), start: fd.get('start'), end: fd.get('end'),
-        parity: fd.get('parity'), room: (fd.get('room') || '').trim(), teacher: (fd.get('teacher') || '').trim() });
+      const isOnce = fd.get('repeat') === 'once', date = isOnce ? fd.get('date') : '';
+      if (isOnce && !date) throw new Error('Выберите дату занятия');
+      upsert('classes', { id: id || uid(), subjectId, date, day: isOnce ? isoDow(parseYmd(date)) : +fd.get('day'), type: fd.get('type'), start: fd.get('start'), end: fd.get('end'),
+        parity: isOnce ? 'all' : fd.get('parity'), room: (fd.get('room') || '').trim(), teacher: (fd.get('teacher') || '').trim() });
       closeModal(); commit();
     });
 }
@@ -718,6 +732,7 @@ const A = {
     closeModal(); commit();
   },
   newClass() { classModal(null); },
+  newClassOn(el) { classModal(null, { date: el.dataset.date }); },
   editClass(el) { classModal(el.dataset.id); },
   classMenu(el) { classMenu(el.dataset.id, el.dataset.date); },
   subjTask(el) { closeModal(); taskModal(null, { kind: 'study', subjectId: el.dataset.sid || undefined, due: el.dataset.date }); },
@@ -786,6 +801,11 @@ const C = {
   subjSel(el) {
     const w = $('#newSubjWrap'); w.classList.toggle('hidden', el.value !== '__new');
     if (el.value === '__new') $('input', w).focus();
+  },
+  repeatSel(el) {
+    const once = el.value === 'once';
+    $('#onceArea').classList.toggle('hidden', !once); $('#dayWrap').classList.toggle('hidden', once); $('#parityWrap').classList.toggle('hidden', once);
+    $('input[name=date]').required = once;
   },
   kindSel(el) { $('#subjArea').classList.toggle('hidden', el.value !== 'study'); $('#colorArea').classList.toggle('hidden', el.value !== 'extra'); },
   libKind(el) { $('#libFile').classList.toggle('hidden', el.value !== 'file'); $('#libLink').classList.toggle('hidden', el.value !== 'link'); },
