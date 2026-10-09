@@ -405,7 +405,7 @@ function vMonth() {
   const sd = parseYmd(sel), wi = weekInfo(sd), cl = classesOn(sd);
   const sts = (byDay[sel] || []).sort((x, y) => (x.done - y.done) || byDue(x, y));
   const openAll = tasks.filter(t => !t.done && t.due && t.due.slice(0, 7) === ymd(first).slice(0, 7)).length;
-  return `<div class="head"><div><h1>Календарь</h1></div><div class="actions"><button class="btn primary" data-act="newTask">+ Задача</button></div></div>
+  return `<div class="head"><div><h1>Календарь</h1></div><div class="actions"><button class="btn primary" data-act="newTaskOn" data-date="${sel}">+ Задача</button></div></div>
     <div class="weeknav"><div class="lbl">${MONTHS_NOM[mi]} ${first.getFullYear()}<small>${openAll ? 'невыполненных задач: ' + openAll : 'задач на месяц нет'}</small></div>
       <div class="pager"><button class="btn" data-act="monthGo" data-v="-1" aria-label="Предыдущий месяц">‹</button>
       <label class="btn datebtn" data-act="pickDate" title="Перейти к дате" aria-label="Перейти к дате">${CAL}<input type="date" data-change="monthDate" value="${sel}"></label>
