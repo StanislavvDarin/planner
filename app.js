@@ -26,6 +26,7 @@ const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return 
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* хранилище недоступно */ } };
 
 const DAYS = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
+const MONTHS_NOM = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
 const DAYS_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 const MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
 const TYPES = { lecture: 'Лекция', practice: 'Практика', lab: 'Лабораторная', seminar: 'Семинар', other: 'Другое' };
@@ -97,7 +98,7 @@ function classesOn(date) {
 
 /* ---------- Состояние интерфейса ---------- */
 const ui = {
-  tab: lsGet('planner.tab') || 'today', wo: 0, tf: 'open', lq: '', ls: '',
+  tab: lsGet('planner.tab') || 'today', wo: 0, mode: lsGet('planner.wmode') === 'month' ? 'month' : 'week', mo: 0, md: null, tf: 'open', lq: '', ls: '',
   /* в расписании сразу показываем недели той же чётности, что и текущая */
   sp: (() => { const w = weekInfo(new Date()); return w && !w.before && !w.odd ? 'even' : 'odd'; })()
 };
@@ -290,6 +291,7 @@ function render() {
 const subj = id => byId('subjects', id);
 const byDue = (a, b) => (a.due || '9').localeCompare(b.due || '9') || (b.priority || 0) - (a.priority || 0);
 
+const CAL = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>';
 const PIN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>';
 const plural = (n, a, b, c) => { const m = n % 100, k = n % 10; return n + ' ' + (m > 10 && m < 20 ? c : k === 1 ? a : k >= 2 && k <= 4 ? b : c); };
 const isNow = c => { const n = new Date(), t = pad(n.getHours()) + ':' + pad(n.getMinutes()); return isoDow(n) === c.day && c.start <= t && t < c.end; };
@@ -302,10 +304,14 @@ function classHtml(c, o = {}) {
   const badge = o.now ? '<span class="badge now">идёт сейчас</span>'
     : !o.hideParity && c.parity === 'odd' ? '<span class="badge odd">нечёт.</span>'
     : !o.hideParity && c.parity === 'even' ? '<span class="badge even">чёт.</span>' : '';
-  return `<div class="item cls ty-${esc(c.type)} ${o.now ? 'now' : ''}" style="--c:${s ? esc(s.color) : '#888'}" data-act="editClass" data-id="${c.id}">
+  if (o.date && c.subjectId) {
+    const n = live('tasks').filter(t => !t.done && t.subjectId === c.subjectId && t.due === o.date).length;
+    if (n) tags.push(`<span class="pill tk">${CHECK}${n}</span>`);
+  }
+  return `<div class="item cls ty-${esc(c.type)} ${o.now ? 'now' : ''}" style="--c:${s ? esc(s.color) : '#888'}" data-act="${o.date ? 'classMenu' : 'editClass'}" data-id="${c.id}" ${o.date ? `data-date="${esc(o.date)}"` : ''}>
     <div class="time"><b>${esc(c.start)}</b><span>${esc(c.end)}</span></div>
     <div class="body"><div class="t">${esc(s ? s.name : 'Без предмета')}</div>
-      <div class="tags">${tags.join('')}</div>${c.teacher ? `<div class="m">${esc(c.teacher)}</div>` : ''}</div>${badge}</div>`;
+      <div class="tags">${tags.join('')}${badge}</div>${c.teacher ? `<div class="m">${esc(c.teacher)}</div>` : ''}</div></div>`;
 }
 function taskHtml(t, showDue = true) {
   const s = subj(t.subjectId), td = ymd(new Date());
@@ -336,25 +342,73 @@ function vToday() {
   return `<div class="head"><div><h1>${DAYS[isoDow(now) - 1]}, ${fmtDate(now)}</h1><div class="sub">${esc(weekLabel(wi))}</div></div>
     <div class="actions"><button class="btn primary" data-act="newTask">+ Задача</button></div></div>
     ${onboarding()}
-    <div class="card"><h2>Пары сегодня</h2>${cl.length ? cl.map(c => classHtml(c, { now: isNow(c) })).join('') : '<div class="empty">Пар нет.</div>'}</div>
+    <div class="card"><h2>Пары сегодня</h2>${cl.length ? cl.map(c => classHtml(c, { now: isNow(c), date: td })).join('') : '<div class="empty">Пар нет.</div>'}</div>
     ${overdue.length ? `<div class="card"><h2>Просрочено</h2>${overdue.map(t => taskHtml(t)).join('')}</div>` : ''}
     <div class="card"><h2>Задачи на сегодня</h2>${tod.length ? tod.map(t => taskHtml(t, false)).join('') : '<div class="empty">На сегодня задач нет.</div>'}</div>
     ${soon.length ? `<div class="card"><h2>Ближайшие 7 дней</h2>${soon.map(t => taskHtml(t)).join('')}</div>` : ''}`;
 }
 
-function vWeek() {
+function modeSeg() {
+  return `<div class="seg2" role="tablist">${[['week', 'Неделя'], ['month', 'Месяц']].map(([k, l]) =>
+    `<button class="segb ${ui.mode === k ? 'on' : ''}" data-act="setMode" data-v="${k}">${l}</button>`).join('')}</div>`;
+}
+function vWeek() { return ui.mode === 'month' ? vMonth() : vWeekGrid(); }
+
+function vMonth() {
+  const today = new Date(), td = ymd(today);
+  const first = new Date(today.getFullYear(), today.getMonth() + ui.mo, 1), mi = first.getMonth();
+  const gridStart = mondayOf(first), last = new Date(first.getFullYear(), mi + 1, 0);
+  const weeks = Math.ceil(((last - gridStart) / 864e5 + 1) / 7);
+  const sel = ui.md && parseYmd(ui.md).getMonth() === mi && parseYmd(ui.md).getFullYear() === first.getFullYear() ? ui.md
+    : (td.slice(0, 7) === ymd(first).slice(0, 7) ? td : ymd(first));
+  const tasks = live('tasks'), byDay = {};
+  tasks.forEach(t => { if (t.due) (byDay[t.due] = byDay[t.due] || []).push(t); });
+  const cells = [];
+  for (let i = 0; i < weeks * 7; i++) {
+    const d = addDays(gridStart, i), k = ymd(d), all = (byDay[k] || []).sort((x, y) => (x.done - y.done) || byDue(x, y));
+    const open = all.filter(t => !t.done), n = open.length, over = n && k < td;
+    const chips = all.slice(0, 3).map(t => { const s = subj(t.subjectId);
+      return `<span class="cal-t ${t.done ? 'done' : ''}" style="--c:${s ? esc(s.color) : '#868e96'}">${esc(t.title)}</span>`; }).join('');
+    const more = all.length > 3 ? `<span class="cal-more">+${all.length - 3}</span>` : '';
+    const dots = open.slice(0, 4).map(t => { const s = subj(t.subjectId); return `<i style="background:${s ? esc(s.color) : '#868e96'}"></i>`; }).join('');
+    cells.push(`<button type="button" class="cal-c ${d.getMonth() !== mi ? 'out' : ''} ${k === td ? 'today' : ''} ${k === sel ? 'sel' : ''} ${over ? 'over' : ''}" data-lv="${Math.min(n, 4)}" data-act="calDay" data-date="${k}" aria-label="${esc(fmtDate(d))}${n ? ', задач: ' + n : ''}">
+      <span class="cal-n">${d.getDate()}</span>${n ? `<span class="cal-cnt">${n}</span>` : ''}
+      <span class="cal-dots">${dots}</span><span class="cal-list">${chips}${more}</span></button>`);
+  }
+  const sd = parseYmd(sel), wi = weekInfo(sd), cl = classesOn(sd);
+  const sts = (byDay[sel] || []).sort((x, y) => (x.done - y.done) || byDue(x, y));
+  const openAll = tasks.filter(t => !t.done && t.due && t.due.slice(0, 7) === ymd(first).slice(0, 7)).length;
+  return `<div class="head"><div><h1>Неделя</h1></div><div class="actions"><button class="btn primary" data-act="newTask">+ Задача</button></div></div>
+    ${modeSeg()}
+    <div class="weeknav"><button class="btn" data-act="monthGo" data-v="-1" aria-label="Предыдущий месяц">‹</button>
+      <div class="lbl">${MONTHS_NOM[mi]} ${first.getFullYear()}<small>${openAll ? 'невыполненных задач: ' + openAll : 'задач на месяц нет'}</small></div>
+      <button class="btn" data-act="monthGo" data-v="1" aria-label="Следующий месяц">›</button>
+      <label class="btn datebtn" data-act="pickDate" title="Перейти к дате" aria-label="Перейти к дате">${CAL}<input type="date" data-change="monthDate" value="${sel}"></label>
+      ${ui.mo ? '<button class="btn" data-act="monthGo" data-v="0">Сегодня</button>' : ''}</div>
+    <div class="cal"><div class="cal-h">${DAYS_SHORT.map(x => `<span>${x}</span>`).join('')}</div><div class="cal-g">${cells.join('')}</div></div>
+    <div class="cal-legend"><span>Задач в день:</span><i data-lv="1"></i>1<i data-lv="2"></i>2<i data-lv="3"></i>3<i data-lv="4"></i>4+<i class="ov"></i>просрочено</div>
+    <div class="card cal-day"><div class="cal-dh"><div><h2 style="margin:0">${DAYS[isoDow(sd) - 1]}, ${esc(fmtDate(sd))}</h2><div class="m" style="color:var(--muted);font-size:13px">${esc(weekLabel(wi))}</div></div>
+      <button class="btn small primary" data-act="newTaskOn" data-date="${sel}">+ Задача</button></div>
+      ${cl.length ? cl.map(c => classHtml(c, { date: sel })).join('') : ''}
+      ${sts.length ? sts.map(t => taskHtml(t, false)).join('') : ''}
+      ${!cl.length && !sts.length ? '<div class="empty">В этот день пар и задач нет.</div>' : ''}</div>`;
+}
+
+function vWeekGrid() {
   const today = new Date(), td = ymd(today), base = addDays(mondayOf(today), 7 * ui.wo), wi = weekInfo(base);
   const days = [...Array(7)].map((_, i) => addDays(base, i));
   const tasks = live('tasks');
   return `<div class="head"><div><h1>Неделя</h1></div><div class="actions"><button class="btn primary" data-act="newTask">+ Задача</button></div></div>
+    ${modeSeg()}
     <div class="weeknav"><button class="btn" data-act="weekGo" data-v="-1" aria-label="Предыдущая неделя">‹</button>
       <div class="lbl">${esc(fmtDate(base))} – ${esc(fmtDate(days[6]))}<small>${esc(weekLabel(wi))}</small></div>
       <button class="btn" data-act="weekGo" data-v="1" aria-label="Следующая неделя">›</button>
+      <label class="btn datebtn" data-act="pickDate" title="Перейти к дате" aria-label="Перейти к дате">${CAL}<input type="date" data-change="weekDate" value="${ymd(base)}"></label>
       ${ui.wo ? '<button class="btn" data-act="weekGo" data-v="0">Текущая</button>' : ''}</div>
     <div class="days">${days.map(d => {
       const k = ymd(d), cl = classesOn(d), ts = tasks.filter(t => t.due === k).sort((a, b) => (a.done - b.done) || byDue(a, b));
       return `<section class="day ${k === td ? 'today' : ''}"><h3>${DAYS[isoDow(d) - 1]}<small>${esc(fmtDate(d))}</small></h3>
-        ${cl.map(c => classHtml(c)).join('')}${ts.map(t => taskHtml(t, false)).join('')}
+        ${cl.map(c => classHtml(c, { date: k })).join('')}${ts.map(t => taskHtml(t, false)).join('')}
         ${!cl.length && !ts.length ? '<div class="empty">Свободно</div>' : ''}</section>`;
     }).join('')}</div>`;
 }
@@ -495,6 +549,19 @@ function classModal(id) {
     });
 }
 
+function classMenu(id, date) {
+  const c = byId('classes', id); if (!c) return;
+  const s = subj(c.subjectId), d = parseYmd(date);
+  const tasks = c.subjectId ? live('tasks').filter(t => t.subjectId === c.subjectId && !t.done).sort(byDue).slice(0, 8) : [];
+  const meta2 = [`${c.start}–${c.end}`, TYPES[c.type] || 'Занятие', c.room, c.teacher].filter(Boolean).map(esc).join(' · ');
+  openModal(s ? s.name : 'Пара', `
+    <div class="cm-info"><b>${esc(DAYS[isoDow(d) - 1])}, ${esc(fmtDate(d))}</b><div class="m">${meta2}</div></div>
+    <div class="buttons"><button type="button" class="btn primary grow" data-act="subjTask" data-sid="${esc(c.subjectId || '')}" data-date="${esc(date)}">+ Задача по предмету</button></div>
+    ${tasks.length ? `<div class="card cm-tasks"><h2>Открытые задачи по предмету</h2>${tasks.map(t => `<div class="item task"><button type="button" class="chk" data-act="toggleTask" data-id="${t.id}" aria-label="Отметить выполненной"></button>
+      <div class="body" data-act="editTask" data-id="${t.id}"><div class="t">${esc(t.title)}</div><div class="m">${t.due ? `<span class="${t.due < ymd(new Date()) ? 'od' : ''}">${esc(fmtDateFull(t.due))}</span>` : 'без срока'}</div></div></div>`).join('')}</div>` : ''}
+    <div class="buttons"><button type="button" class="btn grow" data-act="editClass" data-id="${c.id}">Изменить пару</button></div>`, () => closeModal());
+}
+
 function attHtml() {
   const rows = [];
   draft.files.forEach(fid => { const f = byId('files', fid); if (f) rows.push(`<div class="item"><div class="body"><div class="t" data-act="openFile" data-id="${fid}" style="cursor:pointer">${esc(f.name)}</div><div class="m">${fmtSize(f.size)}</div></div><button type="button" class="btn small danger" data-act="rmAtt" data-v="${fid}">Убрать</button></div>`); });
@@ -585,6 +652,10 @@ function subjectsModal() {
    ===================================================================== */
 const A = {
   tab(el) { ui.tab = el.dataset.v; lsSet('planner.tab', ui.tab); window.scrollTo(0, 0); render(); },
+  setMode(el) { ui.mode = el.dataset.v; lsSet('planner.wmode', ui.mode); render(); },
+  monthGo(el) { const v = +el.dataset.v; ui.mo = v === 0 ? 0 : ui.mo + v; ui.md = null; render(); },
+  calDay(el) { ui.md = el.dataset.date; render(); const c = $('.cal-day'); if (c && window.matchMedia('(max-width:859px)').matches) c.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); },
+  newTaskOn(el) { taskModal(null, { due: el.dataset.date }); },
   weekGo(el) { const v = +el.dataset.v; ui.wo = v === 0 ? 0 : ui.wo + v; render(); },
   setSP(el) { ui.sp = el.dataset.v; render(); },
   setTF(el) { ui.tf = el.dataset.v; render(); },
@@ -603,6 +674,9 @@ const A = {
   },
   newClass() { classModal(null); },
   editClass(el) { classModal(el.dataset.id); },
+  classMenu(el) { classMenu(el.dataset.id, el.dataset.date); },
+  subjTask(el) { closeModal(); taskModal(null, { kind: 'study', subjectId: el.dataset.sid || undefined, due: el.dataset.date }); },
+  pickDate(el, e) { const i = $('input', el); if (e.target !== i) { try { i.showPicker(); } catch (x) { i.focus(); } } },
   delClass(el) { if (!confirm('Удалить эту пару?')) return; tomb('classes', el.dataset.id); closeModal(); commit(); },
   newLib() { libModal(null); },
   editLib(el) { libModal(el.dataset.id); },
@@ -652,6 +726,15 @@ const A = {
   closeModal
 };
 const C = {
+  monthDate(el) {
+    if (!el.value) return;
+    const d = parseYmd(el.value), n = new Date();
+    ui.mo = (d.getFullYear() - n.getFullYear()) * 12 + d.getMonth() - n.getMonth(); ui.md = el.value; render();
+  },
+  weekDate(el) {
+    if (!el.value) return;
+    ui.wo = Math.round((mondayOf(parseYmd(el.value)) - mondayOf(new Date())) / (7 * 864e5)); render();
+  },
   setStart(el) { S.settings = { ...S.settings, start: el.value, u: Date.now() }; commit(); },
   setFirstWeek(el) { const n = parseInt(el.value, 10); S.settings = { ...S.settings, firstWeek: isNaN(n) ? 1 : n, u: Date.now() }; commit(); },
   subjSel(el) {
@@ -685,6 +768,16 @@ document.addEventListener('change', e => {
 document.addEventListener('input', e => {
   if (e.target.id === 'lq') { ui.lq = e.target.value; $('#lib-list').innerHTML = libList(); }
 });
+let swipe = null;
+document.addEventListener('touchstart', e => {
+  swipe = ui.tab === 'week' && !$('#modal-root').firstChild && e.touches.length === 1 && !(e.target.closest && e.target.closest('input,select,textarea'))
+    ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+}, { passive: true });
+document.addEventListener('touchend', e => {
+  if (!swipe) return;
+  const t = e.changedTouches[0], dx = t.clientX - swipe.x, dy = t.clientY - swipe.y; swipe = null;
+  if (Math.abs(dx) > 80 && Math.abs(dy) < 45) { if (ui.mode === 'month') { ui.mo += dx < 0 ? 1 : -1; ui.md = null; } else ui.wo += dx < 0 ? 1 : -1; render(); }
+}, { passive: true });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && $('#modal-root').firstChild) closeModal();
   if (e.key === 'Enter' && e.target.id === 'newSubjName') { e.preventDefault(); A.addSubj(); }
