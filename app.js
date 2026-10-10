@@ -9,7 +9,7 @@ const CLIENT_ID = '427778180640-n28krbjd59qgqp5nskod3m0b1urqk5d6.apps.googleuser
 const SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
 const DATA_NAME = 'planner-data.json';
 const MAX_FILE = 100 * 1024 * 1024;
-const APP_VERSION = '1.5';
+const APP_VERSION = '1.6';
 
 /* ---------- Мелкие помощники ---------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -146,7 +146,7 @@ let token = null, tokenExp = 0, tokenClient = null, tokenPromise = null, cbRes =
 let dataFileId = lsGet('planner.dataFileId') || null;
 let syncState = 'idle', syncErr = '', syncing = false, syncAgain = false, syncTimer = null;
 
-try { const t = JSON.parse(sessionStorage.getItem(SS_TOKEN)); if (t && t.exp > Date.now() + 60000) { token = t.t; tokenExp = t.exp; } } catch (e) { /* нет токена */ }
+try { const t = JSON.parse(localStorage.getItem(SS_TOKEN) || sessionStorage.getItem(SS_TOKEN)); if (t && t.exp > Date.now() + 60000) { token = t.t; tokenExp = t.exp; } } catch (e) { /* нет токена */ }
 
 function loadGis() {
   return new Promise((res, rej) => {
@@ -169,7 +169,7 @@ function getToken() {
           callback: r => {
             if (r.error) return cbRej && cbRej(new Error(r.error));
             token = r.access_token; tokenExp = Date.now() + (+r.expires_in || 3600) * 1000;
-            try { sessionStorage.setItem(SS_TOKEN, JSON.stringify({ t: token, exp: tokenExp })); } catch (e) { /* ок */ }
+            try { localStorage.setItem(SS_TOKEN, JSON.stringify({ t: token, exp: tokenExp })); } catch (e) { /* ок */ }
             meta.signedIn = true; saveMeta();
             cbRes && cbRes(token);
           },
@@ -185,7 +185,7 @@ async function gfetch(url, opts = {}) {
   if (!meta.signedIn) throw new Error('auth');
   const t = await getToken();
   const r = await fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + t } });
-  if (r.status === 401) { token = null; tokenExp = 0; throw new Error('auth'); }
+  if (r.status === 401) { token = null; tokenExp = 0; try { localStorage.removeItem(SS_TOKEN); } catch (e) { /* ок */ } throw new Error('auth'); }
   if (!r.ok) throw new Error('Drive ' + r.status);
   return r;
 }
@@ -422,7 +422,7 @@ function heroTomorrow(cl, tm) {
 function vToday() {
   const now = new Date(), td = ymd(now), wi = weekInfo(now), cl = classesOn(now), nm = now.getHours() * 60 + now.getMinutes();
   const open = live('tasks').filter(t => !t.done);
-  const plan = open.filter(t => t.plan).sort((a, b) => (a.planAt || 0) - (b.planAt || 0));
+  const plan = open.filter(t => t.plan).sort((a, b) => (b.priority || 0) - (a.priority || 0) || (a.due || '9').localeCompare(b.due || '9') || (a.planAt || 0) - (b.planAt || 0));
   const overdue = open.filter(t => t.due && t.due < td).sort(byDue);
   const tod = live('tasks').filter(t => t.due === td).sort((a, b) => (a.done - b.done) || byDue(a, b));
   const nodate = open.filter(t => !t.due).sort((a, b) => (b.priority || 0) - (a.priority || 0) || (a.created || 0) - (b.created || 0));
@@ -915,7 +915,7 @@ const A = {
     if (!confirm('Выйти из Google? Данные останутся на этом устройстве и на вашем Drive.')) return;
     try { if (token && window.google) google.accounts.oauth2.revoke(token, () => {}); } catch (e) { /* ок */ }
     token = null; tokenExp = 0; meta.signedIn = false; saveMeta();
-    try { sessionStorage.removeItem(SS_TOKEN); } catch (e) { /* ок */ }
+    try { localStorage.removeItem(SS_TOKEN); sessionStorage.removeItem(SS_TOKEN); } catch (e) { /* ок */ }
     syncState = 'idle'; render();
   },
   exportData() {
@@ -1030,12 +1030,15 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && meta.signedIn && token && Date.now() - (meta.lastSync || 0) > 30000) syncNow();
 });
 window.addEventListener('online', () => { if (meta.signedIn && meta.dirty) scheduleSync(); });
-/* Если вход уже выполнялся раньше, Google можно обновить тихо — но браузер разрешает
-   всплывающее окно только после действия пользователя. Поэтому ждём первого касания. */
-document.addEventListener('pointerdown', function once() {
-  document.removeEventListener('pointerdown', once);
-  if (meta.signedIn && !(token && Date.now() < tokenExp - 60000)) getToken().then(syncNow).catch(() => { syncState = 'err'; syncErr = 'Нужен вход: нажмите «Синхронизировать»'; renderSync(); });
-}, { once: true });
+/* Токен Google живёт около часа. Если вход уже выполнялся, обновляем его при первом же касании
+   после истечения: браузер разрешает всплывающее окно Google только после действия пользователя,
+   а если сессия Google активна, окно закрывается само, без вопросов. */
+let authTry = 0;
+document.addEventListener('pointerup', () => {
+  if (!meta.signedIn || tokenPromise || (token && Date.now() < tokenExp - 60000) || Date.now() - authTry < 30000) return;
+  authTry = Date.now();
+  getToken().then(syncNow).catch(() => { syncState = 'err'; syncErr = 'Нужен вход: нажмите «Синхронизировать»'; renderSync(); });
+});
 
 /* «Сегодня» обновляется раз в минуту: таймер до конца пары, прошедшие пары */
 setInterval(() => {
