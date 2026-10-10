@@ -1,5 +1,5 @@
 /* Сервис-воркер: даёт работу без интернета (интерфейс и последние данные). */
-const CACHE = 'planner-v4';
+const CACHE = 'planner-v5';
 const ASSETS = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'privacy.html', 'inter-400.woff', 'inter-500.woff', 'inter-600.woff', 'inter-700.woff'];
 
 self.addEventListener('install', e => {

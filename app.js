@@ -9,7 +9,7 @@ const CLIENT_ID = '427778180640-n28krbjd59qgqp5nskod3m0b1urqk5d6.apps.googleuser
 const SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
 const DATA_NAME = 'planner-data.json';
 const MAX_FILE = 100 * 1024 * 1024;
-const APP_VERSION = '1.4';
+const APP_VERSION = '1.5';
 
 /* ---------- Мелкие помощники ---------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -76,6 +76,7 @@ const LINK_ICONS = {
   cloud: '<path d="M7 18a5 5 0 1 1 .9-9.9A6 6 0 0 1 19.5 10 4 4 0 0 1 18 18z"/>',
   heart: '<path d="M12 20s-8-4.9-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 9c0 6.1-8 11-8 11z"/>'
 };
+const FLAG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4M6 4h11l-2.5 4.5L17 13H6"/></svg>';
 const CHECKS = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7l3 3 5-6M4 17l3 3 5-6M15 8h5M15 18h5"/></svg>';
 const CHECK = '<svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg>';
 
@@ -377,10 +378,11 @@ function taskHtml(t, showDue = true) {
   const nf = (t.files || []).filter(f => byId('files', f)).length;
   if (nf) parts.push(`<span class="mi">${CLIP}${nf}</span>`);
   if (t.priority && !t.done) parts.push('<span class="mi imp">Важно</span>');
-  return `<div class="item task ${t.done ? 'done' : ''} ${t.priority && !t.done ? 'imp' : ''} ${tc ? 'tc' : ''}" ${tc ? `style="--c:${esc(tc)}"` : ''}>
+  return `<div class="item task ${t.done ? 'done' : ''} ${t.plan && !t.done ? 'planned' : ''} ${t.priority && !t.done ? 'imp' : ''} ${tc ? 'tc' : ''}" ${tc ? `style="--c:${esc(tc)}"` : ''}>
     <button class="chk" data-act="toggleTask" data-id="${t.id}" aria-label="${t.done ? 'Вернуть в работу' : 'Отметить выполненной'}">${t.done ? CHECK : ''}</button>
     <div class="body" data-act="editTask" data-id="${t.id}"><div class="t">${esc(t.title)}</div><div class="meta">${parts.join('')}</div>
-    ${subs.length && !t.done ? `<div class="subs">${subs.map(x => `<div class="sub ${x.done ? 'done' : ''}"><button type="button" class="chk sm" data-act="toggleSub" data-id="${t.id}" data-sid="${x.id}" aria-label="${x.done ? 'Вернуть в работу' : 'Отметить выполненной'}">${x.done ? CHECK : ''}</button><span>${esc(x.text)}</span></div>`).join('')}</div>` : ''}</div></div>`;
+    ${subs.length && !t.done ? `<div class="subs">${subs.map(x => `<div class="sub ${x.done ? 'done' : ''}"><button type="button" class="chk sm" data-act="toggleSub" data-id="${t.id}" data-sid="${x.id}" aria-label="${x.done ? 'Вернуть в работу' : 'Отметить выполненной'}">${x.done ? CHECK : ''}</button><span>${esc(x.text)}</span></div>`).join('')}</div>` : ''}</div>
+    ${t.done ? '' : `<button type="button" class="ib plan ${t.plan ? 'on' : ''}" data-act="togglePlan" data-id="${t.id}" aria-pressed="${!!t.plan}" aria-label="${t.plan ? 'Убрать из «К выполнению»' : 'Добавить в «К выполнению»'}" title="${t.plan ? 'Убрать из «К выполнению»' : 'К выполнению'}">${FLAG}</button>`}</div>`;
 }
 function onboarding() {
   if (S.settings.start && live('classes').length) return '';
@@ -420,12 +422,14 @@ function heroTomorrow(cl, tm) {
 function vToday() {
   const now = new Date(), td = ymd(now), wi = weekInfo(now), cl = classesOn(now), nm = now.getHours() * 60 + now.getMinutes();
   const open = live('tasks').filter(t => !t.done);
+  const plan = open.filter(t => t.plan).sort((a, b) => (a.planAt || 0) - (b.planAt || 0));
   const overdue = open.filter(t => t.due && t.due < td).sort(byDue);
   const tod = live('tasks').filter(t => t.due === td).sort((a, b) => (a.done - b.done) || byDue(a, b));
   const nodate = open.filter(t => !t.due).sort((a, b) => (b.priority || 0) - (a.priority || 0) || (a.created || 0) - (b.created || 0));
   const soonEnd = ymd(addDays(now, 7));
-  const soon = open.filter(t => t.due > td && t.due <= soonEnd).sort(byDue);
-  const left = cl.filter(c => toMin(c.end) > nm).length, todOpen = tod.filter(t => !t.done).length;
+  const soon = open.filter(t => !t.plan && t.due > td && t.due <= soonEnd).sort(byDue);
+  const overdueAll = open.filter(t => t.due && t.due < td).length;
+  const left = cl.filter(c => toMin(c.end) > nm).length, todOpen = live('tasks').filter(t => t.due === td && !t.done).length;
   const ta = tomorrowAfter(), tm = addDays(now, 1), useTom = !!ta && nm >= toMin(ta) && !!S.settings.start, clT = useTom ? classesOn(tm) : [];
   return `<div class="head"><div><h1>${DAYS[isoDow(now) - 1]}, ${fmtDate(now)}</h1><div class="sub">${weekBadge(wi)}</div></div>
     <div class="actions"><button class="btn primary" data-act="newTask">+ Задача</button></div></div>
@@ -433,10 +437,11 @@ function vToday() {
     ${useTom ? heroTomorrow(clT, tm) : heroHtml(cl, now)}
     <div class="stats"><div class="stat"><b>${useTom ? clT.length : cl.length ? left : 0}</b><span>${useTom ? plural(clT.length, 'пара', 'пары', 'пар').replace(/^\d+ /, '') + ' завтра' : cl.length ? 'пар осталось' : 'пар нет'}</span></div>
       <div class="stat"><b>${todOpen}</b><span>задач на сегодня</span></div>
-      <div class="stat ${overdue.length ? 'bad' : ''}"><b>${overdue.length}</b><span>просрочено</span></div></div>
+      <div class="stat ${overdueAll ? 'bad' : ''}"><b>${overdueAll}</b><span>просрочено</span></div></div>
     <div class="today-grid"><div>
     ${useTom ? `<div class="card"><h2>Пары завтра · ${esc(DAYS[isoDow(tm) - 1])}, ${esc(fmtDate(tm))}</h2>${clT.length ? clT.map(c => classHtml(c, { date: ymd(tm) })).join('') : '<div class="empty">Завтра пар нет.</div>'}</div>`
     : `<div class="card"><h2>Пары сегодня</h2>${cl.length ? cl.map(c => classHtml(c, { now: isNow(c), past: toMin(c.end) <= nm, date: td })).join('') : '<div class="empty">Пар нет.</div>'}</div>`}</div><div>
+    ${plan.length ? `<div class="card plan-card"><h2>К выполнению</h2>${plan.map(t => taskHtml(t)).join('')}</div>` : ''}
     ${overdue.length ? `<div class="card"><h2>Просрочено</h2>${overdue.map(t => taskHtml(t)).join('')}</div>` : ''}
     <div class="card"><h2>Задачи на сегодня</h2>${tod.length ? tod.map(t => taskHtml(t, false)).join('') : '<div class="empty">На сегодня задач нет.</div>'}</div>
     ${soon.length ? `<div class="card"><h2>Ближайшие 7 дней</h2>${soon.map(t => taskHtml(t)).join('')}</div>` : ''}
@@ -534,9 +539,9 @@ function vSchedule() {
 
 function vTasks() {
   const f = ui.tf, all = live('tasks');
-  let list = all.filter(t => f === 'open' ? !t.done : f === 'done' ? t.done : f === 'nodate' ? (!t.done && !t.due) : (!t.done && t.kind === f));
+  let list = all.filter(t => f === 'open' ? !t.done : f === 'done' ? t.done : f === 'nodate' ? (!t.done && !t.due) : f === 'plan' ? (!t.done && t.plan) : (!t.done && t.kind === f));
   list = f === 'done' ? list.sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0)) : list.sort(byDue);
-  const chips = [['open', 'Все активные'], ['study', 'Учёба'], ['extra', 'Дополнительные'], ['nodate', 'Без срока'], ['done', 'Выполненные']]
+  const chips = [['open', 'Все активные'], ['study', 'Учёба'], ['extra', 'Дополнительные'], ['plan', 'К выполнению'], ['nodate', 'Без срока'], ['done', 'Выполненные']]
     .map(([k, l]) => `<button class="chip ${f === k ? 'on' : ''}" data-act="setTF" data-v="${k}">${l}</button>`).join('');
   return `<div class="head"><div><h1>Задачи</h1></div><div class="actions"><button class="btn primary" data-act="newTask">+ Задача</button></div></div>
     <div class="chips">${chips}</div>
@@ -742,6 +747,7 @@ function taskModal(id, preset = {}) {
     <div class="f" style="margin-bottom:14px">Подзадачи<div id="subList">${(t.subs || []).map(subRow).join('')}</div>
       <button type="button" class="btn small" data-act="addSub" style="margin-top:6px;align-self:flex-start">+ Подзадача</button></div>
     <label class="f">Срок <span class="opt">(можно без даты)</span><span class="dwrap"><input type="date" name="due" value="${esc(t.due)}"><button type="button" class="btn small" data-act="clearDue" title="Убрать дату">Без даты</button></span></label>
+    <label class="chkrow"><input type="checkbox" name="plan" ${t.plan ? 'checked' : ''}> К выполнению — показывать в разделе «Сегодня»</label>
     <label class="f">Важность<select name="priority"><option value="0">Обычная</option><option value="1" ${t.priority ? 'selected' : ''}>Важная</option></select></label>
     <label class="f">Заметка<textarea name="note" maxlength="2000">${esc(t.note)}</textarea></label>
     <div class="files"><label class="f" style="margin-bottom:4px">Вложения</label><div id="att">${attHtml()}</div>
@@ -755,7 +761,7 @@ function taskModal(id, preset = {}) {
       for (const f of draft.pending) fileIds.push((await uploadAndRecord(f)).id);
       draft.removed.forEach(removeFile);
       const base = id ? byId('tasks', id) : { id: uid(), done: false, created: Date.now() };
-      upsert('tasks', { ...base, title, kind, subjectId, color: kind === 'extra' ? (fd.get('color') || '') : '', due: fd.get('due') || '', subs: $$('#subList .subrow').map(r => ({ id: r.dataset.sid, text: $('.subt', r).value.trim(), done: r.classList.contains('done') })).filter(x => x.text), priority: +fd.get('priority') || 0, note: (fd.get('note') || '').trim(), files: fileIds });
+      upsert('tasks', { ...base, title, kind, subjectId, color: kind === 'extra' ? (fd.get('color') || '') : '', plan: !!fd.get('plan'), planAt: fd.get('plan') ? (base.plan && base.planAt ? base.planAt : Date.now()) : 0, due: fd.get('due') || '', subs: $$('#subList .subrow').map(r => ({ id: r.dataset.sid, text: $('.subt', r).value.trim(), done: r.classList.contains('done') })).filter(x => x.text), priority: +fd.get('priority') || 0, note: (fd.get('note') || '').trim(), files: fileIds });
       closeModal(); commit();
     });
 }
@@ -824,6 +830,10 @@ const A = {
   libSubj(el) { ui.ls = el.dataset.v; render(); },
   newTask() { taskModal(null); },
   editTask(el) { taskModal(el.dataset.id); },
+  togglePlan(el) {
+    const t = byId('tasks', el.dataset.id); if (!t) return;
+    upsert('tasks', { ...t, plan: !t.plan, planAt: t.plan ? 0 : Date.now() }); commit();
+  },
   toggleSub(el) {
     const t = byId('tasks', el.dataset.id); if (!t) return;
     upsert('tasks', { ...t, subs: (t.subs || []).map(x => x.id === el.dataset.sid ? { ...x, done: !x.done } : x) }); commit();
