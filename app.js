@@ -9,7 +9,7 @@ const CLIENT_ID = '427778180640-n28krbjd59qgqp5nskod3m0b1urqk5d6.apps.googleuser
 const SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
 const DATA_NAME = 'planner-data.json';
 const MAX_FILE = 100 * 1024 * 1024;
-const APP_VERSION = '1.3';
+const APP_VERSION = '1.4';
 
 /* ---------- Мелкие помощники ---------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -76,6 +76,7 @@ const LINK_ICONS = {
   cloud: '<path d="M7 18a5 5 0 1 1 .9-9.9A6 6 0 0 1 19.5 10 4 4 0 0 1 18 18z"/>',
   heart: '<path d="M12 20s-8-4.9-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 9c0 6.1-8 11-8 11z"/>'
 };
+const CHECKS = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7l3 3 5-6M4 17l3 3 5-6M15 8h5M15 18h5"/></svg>';
 const CHECK = '<svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg>';
 
 /* ---------- Данные ---------- */
@@ -369,13 +370,17 @@ function taskHtml(t, showDue = true) {
   parts.push(t.kind === 'extra' ? `<span class="mi sj">${tc ? `<span class="dot" style="background:${esc(tc)}"></span>` : ''}<span>Доп. задача</span></span>`
     : s ? `<span class="mi sj"><span class="dot" style="background:${esc(s.color)}"></span><span>${esc(s.name)}</span></span>`
     : `<span class="mi">Учёба</span>`);
+  const subs = t.subs || [], sd = subs.filter(x => x.done).length;
+  if (showDue && !t.due && !t.done) parts.push('<span class="mi nodate">Без срока</span>');
+  if (subs.length) parts.push(`<span class="mi ${sd === subs.length ? 'ok' : ''}">${CHECKS}${sd}/${subs.length}</span>`);
   if (showDue && t.due) parts.push(`<span class="mi due ${od ? 'od' : !t.done && t.due === td ? 'td' : ''}">${CAL}${t.due === td ? 'Сегодня' : esc(fmtDateFull(t.due))}</span>`);
   const nf = (t.files || []).filter(f => byId('files', f)).length;
   if (nf) parts.push(`<span class="mi">${CLIP}${nf}</span>`);
   if (t.priority && !t.done) parts.push('<span class="mi imp">Важно</span>');
   return `<div class="item task ${t.done ? 'done' : ''} ${t.priority && !t.done ? 'imp' : ''} ${tc ? 'tc' : ''}" ${tc ? `style="--c:${esc(tc)}"` : ''}>
     <button class="chk" data-act="toggleTask" data-id="${t.id}" aria-label="${t.done ? 'Вернуть в работу' : 'Отметить выполненной'}">${t.done ? CHECK : ''}</button>
-    <div class="body" data-act="editTask" data-id="${t.id}"><div class="t">${esc(t.title)}</div><div class="meta">${parts.join('')}</div></div></div>`;
+    <div class="body" data-act="editTask" data-id="${t.id}"><div class="t">${esc(t.title)}</div><div class="meta">${parts.join('')}</div>
+    ${subs.length && !t.done ? `<div class="subs">${subs.map(x => `<div class="sub ${x.done ? 'done' : ''}"><button type="button" class="chk sm" data-act="toggleSub" data-id="${t.id}" data-sid="${x.id}" aria-label="${x.done ? 'Вернуть в работу' : 'Отметить выполненной'}">${x.done ? CHECK : ''}</button><span>${esc(x.text)}</span></div>`).join('')}</div>` : ''}</div></div>`;
 }
 function onboarding() {
   if (S.settings.start && live('classes').length) return '';
@@ -417,6 +422,7 @@ function vToday() {
   const open = live('tasks').filter(t => !t.done);
   const overdue = open.filter(t => t.due && t.due < td).sort(byDue);
   const tod = live('tasks').filter(t => t.due === td).sort((a, b) => (a.done - b.done) || byDue(a, b));
+  const nodate = open.filter(t => !t.due).sort((a, b) => (b.priority || 0) - (a.priority || 0) || (a.created || 0) - (b.created || 0));
   const soonEnd = ymd(addDays(now, 7));
   const soon = open.filter(t => t.due > td && t.due <= soonEnd).sort(byDue);
   const left = cl.filter(c => toMin(c.end) > nm).length, todOpen = tod.filter(t => !t.done).length;
@@ -433,7 +439,8 @@ function vToday() {
     : `<div class="card"><h2>Пары сегодня</h2>${cl.length ? cl.map(c => classHtml(c, { now: isNow(c), past: toMin(c.end) <= nm, date: td })).join('') : '<div class="empty">Пар нет.</div>'}</div>`}</div><div>
     ${overdue.length ? `<div class="card"><h2>Просрочено</h2>${overdue.map(t => taskHtml(t)).join('')}</div>` : ''}
     <div class="card"><h2>Задачи на сегодня</h2>${tod.length ? tod.map(t => taskHtml(t, false)).join('') : '<div class="empty">На сегодня задач нет.</div>'}</div>
-    ${soon.length ? `<div class="card"><h2>Ближайшие 7 дней</h2>${soon.map(t => taskHtml(t)).join('')}</div>` : ''}</div></div>`;
+    ${soon.length ? `<div class="card"><h2>Ближайшие 7 дней</h2>${soon.map(t => taskHtml(t)).join('')}</div>` : ''}
+    ${nodate.length ? `<div class="card"><h2>Без срока</h2>${nodate.slice(0, 6).map(t => taskHtml(t, false)).join('')}${nodate.length > 6 ? `<button type="button" class="btn small more" data-act="allNoDate">Все задачи без срока (${nodate.length})</button>` : ''}</div>` : ''}</div></div>`;
 }
 
 function vMonth() {
@@ -527,9 +534,9 @@ function vSchedule() {
 
 function vTasks() {
   const f = ui.tf, all = live('tasks');
-  let list = all.filter(t => f === 'open' ? !t.done : f === 'done' ? t.done : (!t.done && t.kind === f));
+  let list = all.filter(t => f === 'open' ? !t.done : f === 'done' ? t.done : f === 'nodate' ? (!t.done && !t.due) : (!t.done && t.kind === f));
   list = f === 'done' ? list.sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0)) : list.sort(byDue);
-  const chips = [['open', 'Все активные'], ['study', 'Учёба'], ['extra', 'Дополнительные'], ['done', 'Выполненные']]
+  const chips = [['open', 'Все активные'], ['study', 'Учёба'], ['extra', 'Дополнительные'], ['nodate', 'Без срока'], ['done', 'Выполненные']]
     .map(([k, l]) => `<button class="chip ${f === k ? 'on' : ''}" data-act="setTF" data-v="${k}">${l}</button>`).join('');
   return `<div class="head"><div><h1>Задачи</h1></div><div class="actions"><button class="btn primary" data-act="newTask">+ Задача</button></div></div>
     <div class="chips">${chips}</div>
@@ -720,6 +727,7 @@ function attHtml() {
 }
 const refreshAtt = () => { const a = $('#att'); if (a) a.innerHTML = attHtml(); };
 
+const subRow = x => `<div class="subrow ${x.done ? 'done' : ''}" data-sid="${x.id}"><button type="button" class="chk sm" data-act="subTick" aria-label="Отметить">${x.done ? CHECK : ''}</button><input class="subt" value="${esc(x.text)}" maxlength="200" placeholder="Что нужно сделать" autocomplete="off"><button type="button" class="ib" data-act="subRm" aria-label="Удалить подзадачу">×</button></div>`;
 function taskModal(id, preset = {}) {
   const t = id ? byId('tasks', id) : { kind: 'study', priority: 0, files: [], ...preset };
   if (!t) return;
@@ -731,8 +739,10 @@ function taskModal(id, preset = {}) {
     <div id="subjArea" class="${t.kind === 'extra' ? 'hidden' : ''}">${subjectSelect(t.subjectId)}</div>
     <div id="colorArea" class="${t.kind === 'extra' ? '' : 'hidden'}"><div class="f" style="margin-bottom:14px">Цвет задачи
       <div class="sw">${['', ...COLORS].map((c, i) => `<span><input type="radio" name="color" id="cl${i}" value="${c}" ${(t.color || '') === c ? 'checked' : ''}><label for="cl${i}" style="--c:${c || 'transparent'}" class="${c ? '' : 'none'}" aria-label="${c || 'Без цвета'}"></label></span>`).join('')}</div></div></div>
-    <div class="row"><label class="f">Срок<input type="date" name="due" value="${esc(t.due)}"></label>
-    <label class="f">Важность<select name="priority"><option value="0">Обычная</option><option value="1" ${t.priority ? 'selected' : ''}>Важная</option></select></label></div>
+    <div class="f" style="margin-bottom:14px">Подзадачи<div id="subList">${(t.subs || []).map(subRow).join('')}</div>
+      <button type="button" class="btn small" data-act="addSub" style="margin-top:6px;align-self:flex-start">+ Подзадача</button></div>
+    <label class="f">Срок <span class="opt">(можно без даты)</span><span class="dwrap"><input type="date" name="due" value="${esc(t.due)}"><button type="button" class="btn small" data-act="clearDue" title="Убрать дату">Без даты</button></span></label>
+    <label class="f">Важность<select name="priority"><option value="0">Обычная</option><option value="1" ${t.priority ? 'selected' : ''}>Важная</option></select></label>
     <label class="f">Заметка<textarea name="note" maxlength="2000">${esc(t.note)}</textarea></label>
     <div class="files"><label class="f" style="margin-bottom:4px">Вложения</label><div id="att">${attHtml()}</div>
     ${dropHtml('pickAtt')}</div>
@@ -745,7 +755,7 @@ function taskModal(id, preset = {}) {
       for (const f of draft.pending) fileIds.push((await uploadAndRecord(f)).id);
       draft.removed.forEach(removeFile);
       const base = id ? byId('tasks', id) : { id: uid(), done: false, created: Date.now() };
-      upsert('tasks', { ...base, title, kind, subjectId, color: kind === 'extra' ? (fd.get('color') || '') : '', due: fd.get('due') || '', priority: +fd.get('priority') || 0, note: (fd.get('note') || '').trim(), files: fileIds });
+      upsert('tasks', { ...base, title, kind, subjectId, color: kind === 'extra' ? (fd.get('color') || '') : '', due: fd.get('due') || '', subs: $$('#subList .subrow').map(r => ({ id: r.dataset.sid, text: $('.subt', r).value.trim(), done: r.classList.contains('done') })).filter(x => x.text), priority: +fd.get('priority') || 0, note: (fd.get('note') || '').trim(), files: fileIds });
       closeModal(); commit();
     });
 }
@@ -809,10 +819,23 @@ const A = {
   newTaskOn(el) { taskModal(null, { due: el.dataset.date }); },
   weekGo(el) { const v = +el.dataset.v; ui.wo = v === 0 ? 0 : ui.wo + v; render(); },
   setSP(el) { ui.sp = el.dataset.v; render(); },
+  allNoDate() { ui.tf = 'nodate'; ui.tab = 'tasks'; render(); },
   setTF(el) { ui.tf = el.dataset.v; render(); },
   libSubj(el) { ui.ls = el.dataset.v; render(); },
   newTask() { taskModal(null); },
   editTask(el) { taskModal(el.dataset.id); },
+  toggleSub(el) {
+    const t = byId('tasks', el.dataset.id); if (!t) return;
+    upsert('tasks', { ...t, subs: (t.subs || []).map(x => x.id === el.dataset.sid ? { ...x, done: !x.done } : x) }); commit();
+  },
+  addSub() {
+    const l = $('#subList'); if (!l) return;
+    l.insertAdjacentHTML('beforeend', subRow({ id: uid(), text: '', done: false }));
+    l.lastElementChild.querySelector('.subt').focus();
+  },
+  subRm(el) { el.closest('.subrow').remove(); },
+  subTick(el) { const r = el.closest('.subrow'); const on = r.classList.toggle('done'); el.innerHTML = on ? CHECK : ''; },
+  clearDue() { const i = $('input[name=due]'); if (i) i.value = ''; },
   toggleTask(el) {
     const t = byId('tasks', el.dataset.id); if (!t) return;
     upsert('tasks', { ...t, done: !t.done, doneAt: t.done ? 0 : Date.now() }); commit();
@@ -991,6 +1014,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && $('#modal-root').firstChild) closeModal();
   if (e.key === 'Enter' && e.target.id === 'newSubjName') { e.preventDefault(); A.addSubj(); }
+  if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('subt')) { e.preventDefault(); if (e.target.value.trim()) A.addSub(); }
 });
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && meta.signedIn && token && Date.now() - (meta.lastSync || 0) > 30000) syncNow();

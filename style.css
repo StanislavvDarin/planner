@@ -261,7 +261,7 @@ svg{flex:none}
 .day .empty{padding:0 2px 4px}
 
 /* ---------- формы ---------- */
-label.f{display:block;margin-bottom:14px;font-size:13px;color:var(--muted);font-weight:600;min-width:0}
+label.f,div.f{display:block;margin-bottom:14px;font-size:13px;color:var(--muted);font-weight:600;min-width:0}
 label.f>input,label.f>select,label.f>textarea{display:block;width:100%;min-width:0;margin-top:6px;min-height:46px;padding:11px 13px;border:1px solid var(--line);
   border-radius:var(--r-sm);background-color:var(--card2);color:var(--text);font-weight:400;font-size:16px}
 label.f>select{-webkit-appearance:none;appearance:none;padding-right:38px;
@@ -441,3 +441,30 @@ h2.sec{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--
 .item.dim .lk,.item.dim .t{opacity:.5}
 .chkrow{display:flex;align-items:center;gap:10px;margin:0 0 14px;font-size:14.5px;cursor:pointer}
 .chkrow input{width:20px;height:20px;accent-color:var(--brand);flex:none}
+
+/* подзадачи и задачи без срока */
+.subs{margin-top:8px;display:flex;flex-direction:column;gap:2px}
+.sub{display:flex;align-items:center;gap:10px;min-height:30px;font-size:14px}
+.sub.done span{text-decoration:line-through;color:var(--muted)}
+.chk.sm{width:18px;height:18px;border-width:1.8px}
+.chk.sm svg{width:11px;height:11px}
+.sub.done .chk.sm,.subrow.done .chk.sm{background:var(--brand);border-color:var(--brand)}
+.task.tc .sub.done .chk.sm,.task.tc .chk.sm:hover{border-color:var(--c)}
+.task.tc .sub.done .chk.sm{background:var(--c)}
+.mi.ok{color:var(--brand);font-weight:600}
+.mi.nodate{color:var(--muted);font-style:italic}
+.mi svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.subrow{display:flex;align-items:center;gap:8px;margin-top:6px}
+.subrow .subt{flex:1;min-width:0}
+.subrow.done .subt{text-decoration:line-through;color:var(--muted)}
+.opt{font-weight:400;color:var(--muted);font-size:12px}
+.dwrap{display:flex;gap:8px;align-items:center}
+.dwrap input{flex:1;min-width:0}
+.btn.more{margin:8px 14px 12px}
+.dwrap input,.subt{display:block;min-width:0;min-height:46px;padding:11px 13px;border:1px solid var(--line);border-radius:var(--r-sm);background-color:var(--card2);color:var(--text);font-weight:400;font-size:16px}
+.dwrap{margin-top:6px}.dwrap input{flex:1}
+.dwrap input:focus,.subt:focus{outline:2px solid var(--brand);outline-offset:-1px;background-color:var(--card)}
+.dwrap .btn{flex:none;min-height:46px}
+.item.task{align-items:flex-start}
+.item.task>.chk{margin-top:1px}
+.item.task .t{line-height:1.3}
